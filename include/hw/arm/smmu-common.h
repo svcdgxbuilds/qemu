@@ -113,6 +113,7 @@ struct SMMUState {
     const char *mrtypename;
     MemoryRegion iomem;
     int iommufd; /* /dev/iommu FD */
+    EventNotifier notifier;
 
     GHashTable *smmu_pcibus_by_busptr;
     GHashTable *configs; /* cache for configuration data */
