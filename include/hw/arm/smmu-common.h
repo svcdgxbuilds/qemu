@@ -103,6 +103,7 @@ typedef struct SMMUTransCfg {
     uint8_t tbi;               /* Top Byte Ignore */
     uint16_t asid;
     SMMUTransTableInfo tt[2];
+    dma_addr_t s1ctxptr;
     /* Used by stage-2 only. */
     struct SMMUS2Cfg s2cfg;
 } SMMUTransCfg;
