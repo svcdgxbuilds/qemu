@@ -991,6 +991,80 @@ static void smmuv3_invalidate_all(SMMUState *bs)
 #endif
 }
 
+static SMMUDevice *smmu_find_sdev(SMMUState *bs, uint32_t dev_id)
+{
+    SMMUDevice *sdev = NULL;
+
+    QLIST_FOREACH(sdev, &bs->devices_iommufd, next) {
+        if (!sdev->idev || sdev->idev->dev_id != dev_id)
+		continue;
+	break;
+    }
+
+    return sdev;
+}
+
+static void smmuv3_inject_faults(void *smmu, struct iommu_fault *buf)
+{
+#ifdef __linux__
+    struct iommu_fault_unrecoverable *fault;
+    SMMUEventInfo info = {};
+    SMMUv3State *s3 = smmu;
+    SMMUState *bs = ARM_SMMU(s3);
+    SMMUDevice *sdev = smmu_find_sdev(bs, buf->dev_id);
+
+    if (buf->type != IOMMU_FAULT_DMA_UNRECOV) {
+        return;
+    }
+
+    fault = &buf->event;
+
+    if (sdev) {
+        info.sid = smmu_get_sid(sdev);
+    }
+
+    switch (fault->reason) {
+    case IOMMU_FAULT_REASON_PASID_INVALID:
+        info.type = SMMU_EVT_C_BAD_SUBSTREAMID;
+        /* TODO further fill info.u.c_bad_substream */
+        break;
+    case IOMMU_FAULT_REASON_PASID_FETCH:
+        info.type = SMMU_EVT_F_CD_FETCH;
+        break;
+    case IOMMU_FAULT_REASON_BAD_PASID_ENTRY:
+        info.type = SMMU_EVT_C_BAD_CD;
+        /* TODO further fill info.u.c_bad_cd */
+        break;
+    case IOMMU_FAULT_REASON_WALK_EABT:
+        info.type = SMMU_EVT_F_WALK_EABT;
+        info.u.f_walk_eabt.addr = fault->addr;
+        info.u.f_walk_eabt.addr2 = fault->fetch_addr;
+        break;
+    case IOMMU_FAULT_REASON_PTE_FETCH:
+        info.type = SMMU_EVT_F_TRANSLATION;
+        info.u.f_translation.addr = fault->addr;
+        break;
+    case IOMMU_FAULT_REASON_OOR_ADDRESS:
+        info.type = SMMU_EVT_F_ADDR_SIZE;
+        info.u.f_addr_size.addr = fault->addr;
+        break;
+    case IOMMU_FAULT_REASON_ACCESS:
+        info.type = SMMU_EVT_F_ACCESS;
+        info.u.f_access.addr = fault->addr;
+        break;
+    case IOMMU_FAULT_REASON_PERMISSION:
+        info.type = SMMU_EVT_F_PERMISSION;
+        info.u.f_permission.addr = fault->addr;
+        break;
+    default:
+        warn_report("%s Unexpected fault reason received from host: %d",
+                    __func__, fault->reason);
+    }
+
+    smmuv3_record_event(s3, &info);
+#endif
+}
+
 static void smmuv3_config_ste(SMMUState *bs, uint32_t sid)
 {
 #ifdef __linux__
@@ -1040,7 +1114,7 @@ static void smmuv3_config_ste(SMMUState *bs, uint32_t sid)
                             iommu_config.smmu.config, cfg->s1ctxptr);
 
     ret = smmu_iommu_alloc_s1_hwpt(bs, sdev, cfg->s1ctxptr, &iommu_config,
-                                   NULL);
+                                   smmuv3_inject_faults);
     if (ret) {
         error_report("Unable to alloc Stage-1 HW Page Table: %d", ret);
         return;
