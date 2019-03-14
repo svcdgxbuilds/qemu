@@ -793,6 +793,33 @@ epilogue:
     return entry;
 }
 
+static uint8_t smmuv3_get_granule(SMMUDevice *sdev, int asid,
+                                  dma_addr_t iova, uint8_t tg)
+{
+    SMMUEventInfo event = {.inval_ste_allowed = true};
+    SMMUTransCfg *cfg = smmuv3_get_config(sdev, &event);
+    SMMUTransTableInfo *tt;
+
+    if (tg) {
+        return tg * 2 + 10;
+    }
+
+    if (!cfg) {
+        return 0;
+    }
+
+    if (asid >= 0 && cfg->asid != asid) {
+        return 0;
+    }
+
+    tt = select_tt(cfg, iova);
+    if (!tt) {
+        return 0;
+    }
+
+    return tt->granule_sz;
+}
+
 /**
  * smmuv3_notify_iova - call the notifier @n for a given
  * @asid and @iova tuple.
@@ -810,29 +837,11 @@ static void smmuv3_notify_iova(IOMMUMemoryRegion *mr,
                                uint8_t tg, uint64_t num_pages)
 {
     SMMUDevice *sdev = container_of(mr, SMMUDevice, iommu);
+    uint8_t granule = smmuv3_get_granule(sdev, asid, iova, tg);
     IOMMUTLBEvent event;
-    uint8_t granule;
 
-    if (!tg) {
-        SMMUEventInfo event = {.inval_ste_allowed = true};
-        SMMUTransCfg *cfg = smmuv3_get_config(sdev, &event);
-        SMMUTransTableInfo *tt;
-
-        if (!cfg) {
-            return;
-        }
-
-        if (asid >= 0 && cfg->asid != asid) {
-            return;
-        }
-
-        tt = select_tt(cfg, iova);
-        if (!tt) {
-            return;
-        }
-        granule = tt->granule_sz;
-    } else {
-        granule = tg * 2 + 10;
+    if (!granule) {
+        return;
     }
 
     event.type = IOMMU_NOTIFIER_UNMAP;
@@ -863,6 +872,52 @@ static void smmuv3_inv_notifiers_iova(SMMUState *s, int asid, dma_addr_t iova,
     }
 }
 
+static void smmuv3_invalidate_iova(SMMUState *bs, int asid, dma_addr_t iova,
+                                   uint8_t tg, uint64_t num_pages, bool leaf)
+{
+#ifdef __linux__
+    SMMUDevice *sdev;
+
+    if (!bs->iommufd || bs->iommufd->fd < 0) {
+        return;
+    }
+
+    QLIST_FOREACH(sdev, &bs->devices_iommufd, next) {
+        struct iommu_cache_invalidate_info cache_info = {};
+        IOMMUMemoryRegion *mr = &sdev->iommu;
+        uint8_t granule;
+
+        if (!sdev->idev || !sdev->hwpt) {
+            continue;
+        }
+
+        granule = smmuv3_get_granule(sdev, asid, iova, tg);
+        if (!granule) {
+            continue;
+        }
+
+        trace_smmuv3_invalidate_iova(mr->parent_obj.name, asid, iova,
+                                     tg, num_pages, leaf);
+
+        cache_info.version = IOMMU_CACHE_INVALIDATE_INFO_VERSION_1;
+        cache_info.cache = IOMMU_CACHE_INV_TYPE_IOTLB;
+        cache_info.granularity = IOMMU_INV_GRANU_ADDR;
+        cache_info.granu.addr_info.flags = IOMMU_INV_ADDR_FLAGS_ARCHID;
+        if (leaf) {
+            cache_info.granu.addr_info.flags |= IOMMU_INV_ADDR_FLAGS_LEAF;
+        }
+        cache_info.granu.addr_info.archid = asid;
+        cache_info.granu.addr_info.addr = iova;
+        cache_info.granu.addr_info.granule_size = 1 << granule;
+        cache_info.granu.addr_info.nb_granules = num_pages;
+
+        if (smmu_iommu_invalidate_cache(sdev, &cache_info)) {
+            error_report("Cache flush failed");
+        }
+    }
+#endif
+}
+
 static void smmuv3_s1_range_inval(SMMUState *s, Cmd *cmd)
 {
     dma_addr_t end, addr = CMD_ADDR(cmd);
@@ -883,6 +938,7 @@ static void smmuv3_s1_range_inval(SMMUState *s, Cmd *cmd)
 
     if (!tg) {
         trace_smmuv3_s1_range_inval(vmid, asid, addr, tg, 1, ttl, leaf);
+        smmuv3_invalidate_iova(s, asid, addr, tg, 1, leaf);
         smmuv3_inv_notifiers_iova(s, asid, addr, tg, 1);
         smmu_iotlb_inv_iova(s, asid, addr, tg, 1, ttl);
         return;
@@ -901,6 +957,7 @@ static void smmuv3_s1_range_inval(SMMUState *s, Cmd *cmd)
 
         num_pages = (mask + 1) >> granule;
         trace_smmuv3_s1_range_inval(vmid, asid, addr, tg, num_pages, ttl, leaf);
+        smmuv3_invalidate_iova(s, asid, addr, tg, num_pages, leaf);
         smmuv3_inv_notifiers_iova(s, asid, addr, tg, num_pages);
         smmu_iotlb_inv_iova(s, asid, addr, tg, num_pages, ttl);
         addr += mask + 1;
