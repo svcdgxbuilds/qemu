@@ -1553,6 +1553,29 @@ static int smmuv3_notify_flag_changed(IOMMUMemoryRegion *iommu,
     return 0;
 }
 
+static struct iommu_hwpt_arm_smmuv3 smmuv3_nested_data = {
+    .flags = IOMMU_SMMU_FLAG_S2,
+    .format = IOMMU_SMMU_FORMAT_SMMUV3,
+};
+
+static int smmuv3_get_attr(IOMMUMemoryRegion *iommu,
+                           enum IOMMUMemoryRegionAttr attr,
+                           void *data)
+{
+    if (attr == IOMMU_ATTR_VFIO_NESTED) {
+        IOMMUVFIONestedData nested_data = {
+            .supported = true,
+            .data_type = IOMMU_HWPT_DATA_ARM_SMMUV3,
+            .data_len = sizeof(struct iommu_hwpt_arm_smmuv3),
+            .data = &smmuv3_nested_data,
+        };
+
+        *(IOMMUVFIONestedData *) data = nested_data;
+        return 0;
+    }
+    return -EINVAL;
+}
+
 static void smmuv3_iommu_memory_region_class_init(ObjectClass *klass,
                                                   void *data)
 {
@@ -1560,6 +1583,7 @@ static void smmuv3_iommu_memory_region_class_init(ObjectClass *klass,
 
     imrc->translate = smmuv3_translate;
     imrc->notify_flag_changed = smmuv3_notify_flag_changed;
+    imrc->get_attr = smmuv3_get_attr;
 }
 
 static const TypeInfo smmuv3_type_info = {
