@@ -5682,6 +5682,24 @@ static int vtd_iommu_notify_flag_changed(IOMMUMemoryRegion *iommu,
     return 0;
 }
 
+static int vtd_iommu_get_attr(IOMMUMemoryRegion *iommu,
+                              enum IOMMUMemoryRegionAttr attr,
+                              void *data)
+{
+    if (attr == IOMMU_ATTR_VFIO_NESTED) {
+        IOMMUVFIONestedData nested_data = {
+            .supported = false,
+            .data_type = IOMMU_USER_INTEL_VTD,
+            .data_len = 0,
+            .data = NULL,
+        };
+
+        *(IOMMUVFIONestedData *) data = nested_data;
+        return 0;
+     }
+     return -EINVAL;
+ }
+
 static int vtd_post_load(void *opaque, int version_id)
 {
     IntelIOMMUState *iommu = opaque;
@@ -6811,6 +6829,7 @@ static void vtd_iommu_memory_region_class_init(ObjectClass *klass,
 
     imrc->translate = vtd_iommu_translate;
     imrc->notify_flag_changed = vtd_iommu_notify_flag_changed;
+    imrc->get_attr = vtd_iommu_get_attr;
     imrc->replay = vtd_iommu_replay;
 }
 
