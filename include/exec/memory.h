@@ -287,8 +287,16 @@ typedef struct MemoryRegionClass {
 
 
 enum IOMMUMemoryRegionAttr {
-    IOMMU_ATTR_SPAPR_TCE_FD
+    IOMMU_ATTR_SPAPR_TCE_FD,
+    IOMMU_ATTR_VFIO_NESTED,
 };
+
+typedef struct IOMMUVFIONestedData {
+    bool supported;
+    uint32_t data_type;
+    uint32_t data_len;
+    void *data;
+} IOMMUVFIONestedData;
 
 /*
  * IOMMUMemoryRegionClass:
