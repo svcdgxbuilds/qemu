@@ -1043,6 +1043,43 @@ static void smmuv3_invalidate_asid(SMMUState *bs, uint16_t asid)
 #endif
 }
 
+static void smmuv3_invalidate_ssid(SMMUState *bs, uint32_t sid, uint32_t ssid)
+{
+#ifdef __linux__
+    struct iommu_cache_invalidate_info cache_info = {};
+    IOMMUMemoryRegion *mr = smmu_iommu_mr(bs, sid);
+    SMMUDevice *sdev;
+
+    if (!mr) {
+        return;
+    }
+
+    sdev = container_of(mr, SMMUDevice, iommu);
+    if (!sdev) {
+        return;
+    }
+
+    /* flush QEMU config cache */
+    smmuv3_flush_config(sdev);
+
+    if (!sdev->idev || !sdev->hwpt || !bs->iommufd || bs->iommufd->fd < 0) {
+        return;
+    }
+
+    trace_smmuv3_invalidate_ssid(sid, ssid);
+
+    cache_info.version = IOMMU_CACHE_INVALIDATE_INFO_VERSION_1;
+    cache_info.cache = IOMMU_CACHE_INV_TYPE_PASID;
+    cache_info.granularity = IOMMU_INV_GRANU_PASID;
+    cache_info.granu.pasid_info.flags = IOMMU_INV_PASID_FLAGS_PASID;
+    cache_info.granu.pasid_info.pasid = ssid;
+
+    if (smmu_iommu_invalidate_cache(sdev, &cache_info)) {
+        error_report("Cache flush failed");
+    }
+#endif
+}
+
 static int smmuv3_cmdq_consume(SMMUv3State *s)
 {
     SMMUState *bs = ARM_SMMU(s);
@@ -1128,21 +1165,15 @@ static int smmuv3_cmdq_consume(SMMUv3State *s)
         case SMMU_CMD_CFGI_CD_ALL:
         {
             uint32_t sid = CMD_SID(&cmd);
-            IOMMUMemoryRegion *mr = smmu_iommu_mr(bs, sid);
-            SMMUDevice *sdev;
+            uint32_t ssid = CMD_SSID(&cmd);
 
             if (CMD_SSEC(&cmd)) {
                 cmd_error = SMMU_CERROR_ILL;
                 break;
             }
 
-            if (!mr) {
-                break;
-            }
-
             trace_smmuv3_cmdq_cfgi_cd(sid);
-            sdev = container_of(mr, SMMUDevice, iommu);
-            smmuv3_flush_config(sdev);
+            smmuv3_invalidate_ssid(bs, sid, ssid);
             break;
         }
         case SMMU_CMD_TLBI_NH_ASID:
