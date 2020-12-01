@@ -895,6 +895,36 @@ static void smmuv3_inv_notifiers_iova(SMMUState *s, int asid, dma_addr_t iova,
     }
 }
 
+static void smmuv3_notify_cd_inv(SMMUState *bs, uint32_t sid, uint32_t ssid)
+{
+#ifdef __linux__
+    IOMMUMemoryRegion *mr = smmu_iommu_mr(bs, sid);
+    IOMMUTLBEvent event = {};
+    IOMMUNotifier *n;
+    SMMUDevice *sdev;
+
+    if (!mr) {
+        return;
+    }
+
+    sdev = container_of(mr, SMMUDevice, iommu);
+
+    /* flush QEMU config cache */
+    smmuv3_flush_config(sdev);
+
+    event.type = IOMMU_NOTIFIER_UNMAP;
+    event.entry.target_as = &address_space_memory;
+    event.entry.perm = IOMMU_NONE;
+    event.entry.granularity = IOMMU_INV_GRAN_PASID;
+    event.entry.flags = IOMMU_INV_FLAGS_PASID;
+    event.entry.pasid = ssid;
+
+    IOMMU_NOTIFIER_FOREACH(n, mr) {
+        memory_region_notify_iommu_one(n, &event);
+    }
+#endif
+}
+
 static void smmuv3_s1_range_inval(SMMUState *s, Cmd *cmd)
 {
     dma_addr_t end, addr = CMD_ADDR(cmd);
@@ -1112,21 +1142,15 @@ static int smmuv3_cmdq_consume(SMMUv3State *s)
         case SMMU_CMD_CFGI_CD_ALL:
         {
             uint32_t sid = CMD_SID(&cmd);
-            IOMMUMemoryRegion *mr = smmu_iommu_mr(bs, sid);
-            SMMUDevice *sdev;
+            uint32_t ssid = CMD_SSID(&cmd);
 
             if (CMD_SSEC(&cmd)) {
                 cmd_error = SMMU_CERROR_ILL;
                 break;
             }
 
-            if (!mr) {
-                break;
-            }
-
             trace_smmuv3_cmdq_cfgi_cd(sid);
-            sdev = container_of(mr, SMMUDevice, iommu);
-            smmuv3_flush_config(sdev);
+            smmuv3_notify_cd_inv(bs, sid, ssid);
             break;
         }
         case SMMU_CMD_TLBI_NH_ASID:
