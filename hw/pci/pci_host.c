@@ -222,6 +222,8 @@ const VMStateDescription vmstate_pcihost = {
 static Property pci_host_properties_common[] = {
     DEFINE_PROP_BOOL("x-config-reg-migration-enabled", PCIHostState,
                      mig_enabled, true),
+    DEFINE_PROP_INT32("pci-host-iommu-id", PCIHostState,
+                      iommu_id, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
