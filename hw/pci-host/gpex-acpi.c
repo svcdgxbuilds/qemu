@@ -179,6 +179,7 @@ void acpi_dsdt_add_gpex(Aml *scope, struct GPEXConfig *cfg)
             if (numa_node != NUMA_NODE_UNASSIGNED) {
                 aml_append(dev, aml_name_decl("_PXM", aml_int(numa_node)));
             }
+            aml_append(dev, aml_name_decl("_CCA", aml_int(1)));
 
             acpi_dsdt_add_pci_route_table(dev, cfg->irq);
 
