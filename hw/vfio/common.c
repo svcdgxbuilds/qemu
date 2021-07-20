@@ -1832,7 +1832,7 @@ static int vfio_get_iommu_type(VFIOContainer *container,
 }
 
 static int vfio_init_container(VFIOContainer *container, int group_fd,
-                               bool want_nested, Error **errp)
+                               bool want_nested, uint32_t *vmid, Error **errp)
 {
     int iommu_type, ret;
 
@@ -1845,6 +1845,14 @@ static int vfio_init_container(VFIOContainer *container, int group_fd,
     if (ret) {
         error_setg_errno(errp, errno, "Failed to set group container");
         return -errno;
+    }
+
+    if (want_nested && *vmid != VFIO_IOMMU_VMID_INVALID) {
+        ret = ioctl(container->fd, VFIO_IOMMU_SET_VMID, *vmid);
+        if (ret) {
+            error_setg_errno(errp, errno, "Failed to set SMMU vmid");
+            return -errno;
+        }
     }
 
     while (ioctl(container->fd, VFIO_SET_IOMMU, iommu_type)) {
@@ -1860,6 +1868,14 @@ static int vfio_init_container(VFIOContainer *container, int group_fd,
         }
         error_setg_errno(errp, errno, "Failed to set iommu for container");
         return -errno;
+    }
+
+    if (want_nested && *vmid == VFIO_IOMMU_VMID_INVALID) {
+        ret = ioctl(container->fd, VFIO_IOMMU_GET_VMID, vmid);
+        if (ret) {
+            error_setg_errno(errp, errno, "Failed to get SMMU vmid");
+            return -errno;
+        }
     }
 
     container->iommu_type = iommu_type;
@@ -1938,6 +1954,7 @@ static void vfio_get_iommu_info_migration(VFIOContainer *container,
 static int vfio_connect_container(VFIOGroup *group, AddressSpace *as,
                                   Error **errp)
 {
+    uint32_t vmid = VFIO_IOMMU_VMID_INVALID;
     VFIOContainer *container;
     int ret, fd;
     VFIOAddressSpace *space;
@@ -2018,7 +2035,7 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as,
     QLIST_INIT(&container->giommu_list);
     QLIST_INIT(&container->hostwin_list);
 
-    ret = vfio_init_container(container, group->fd, nested, errp);
+    ret = vfio_init_container(container, group->fd, nested, &vmid, errp);
     if (ret) {
         goto free_container_exit;
     }
