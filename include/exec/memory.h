@@ -401,6 +401,29 @@ struct IOMMUMemoryRegionClass {
     void (*replay)(IOMMUMemoryRegion *iommu, IOMMUNotifier *notifier);
 
     /**
+     * @set_attr:
+     *
+     * Set IOMMU misc attributes. This is an optional method that
+     * can be used to allow users of the IOMMU to set implementation-specific
+     * information. The IOMMU implements this method to handle calls
+     * by IOMMU users to memory_region_iommu_set_attr() by filling in
+     * the data variable for any IOMMUMemoryRegionAttr values that
+     * the IOMMU supports. If the method is unimplemented then
+     * memory_region_iommu_set_attr() will always return -EINVAL.
+     *
+     * @iommu: the IOMMUMemoryRegion
+     *
+     * @attr: attribute being queried
+     *
+     * @data: data value to set the attribute
+     *
+     * Returns 0 on success, or a negative errno; in particular
+     * returns -EINVAL for unrecognized or unimplemented attribute types.
+     */
+    int (*set_attr)(IOMMUMemoryRegion *iommu, enum IOMMUMemoryRegionAttr attr,
+                    int data);
+
+    /**
      * @get_attr:
      *
      * Get IOMMU misc attributes. This is an optional method that
@@ -1489,6 +1512,22 @@ void memory_region_iommu_replay(IOMMUMemoryRegion *iommu_mr, IOMMUNotifier *n);
  */
 void memory_region_unregister_iommu_notifier(MemoryRegion *mr,
                                              IOMMUNotifier *n);
+
+/**
+ * memory_region_iommu_set_attr: set an IOMMU attr if set_attr() is
+ * defined on the IOMMU.
+ *
+ * Returns 0 on success, or a negative errno otherwise. In particular,
+ * -EINVAL indicates that the IOMMU does not support to set the requested
+ * attribute.
+ *
+ * @iommu_mr: the memory region
+ * @attr: the requested attribute
+ * @data: input value to set the attribute
+ */
+int memory_region_iommu_set_attr(IOMMUMemoryRegion *iommu_mr,
+                                 enum IOMMUMemoryRegionAttr attr,
+                                 int data);
 
 /**
  * memory_region_iommu_get_attr: return an IOMMU attr if get_attr() is

@@ -1994,6 +1994,19 @@ void memory_region_notify_iommu(IOMMUMemoryRegion *iommu_mr,
     }
 }
 
+int memory_region_iommu_set_attr(IOMMUMemoryRegion *iommu_mr,
+                                 enum IOMMUMemoryRegionAttr attr,
+                                 int data)
+{
+    IOMMUMemoryRegionClass *imrc = IOMMU_MEMORY_REGION_GET_CLASS(iommu_mr);
+
+    if (!imrc->set_attr) {
+        return -EINVAL;
+    }
+
+    return imrc->set_attr(iommu_mr, attr, data);
+}
+
 int memory_region_iommu_get_attr(IOMMUMemoryRegion *iommu_mr,
                                  enum IOMMUMemoryRegionAttr attr,
                                  void *data)
