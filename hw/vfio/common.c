@@ -1965,6 +1965,10 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as,
         iommu_mr = IOMMU_MEMORY_REGION(as->root);
         memory_region_iommu_get_attr(iommu_mr, IOMMU_ATTR_VFIO_NESTED,
                                      (void *)&nested);
+        if (nested) {
+            memory_region_iommu_get_attr(iommu_mr, IOMMU_ATTR_VFIO_VMID,
+                                         (void *)&vmid);
+        }
     }
 
     space = vfio_get_address_space(as);
@@ -2040,6 +2044,11 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as,
         goto free_container_exit;
     }
     trace_vfio_connect_new_container(group->groupid, container->fd);
+
+    if (nested && memory_region_is_iommu(as->root)) {
+        iommu_mr = IOMMU_MEMORY_REGION(as->root);
+        memory_region_iommu_set_attr(iommu_mr, IOMMU_ATTR_VFIO_VMID, vmid);
+    }
 
     switch (container->iommu_type) {
     case VFIO_TYPE1_NESTING_IOMMU:
