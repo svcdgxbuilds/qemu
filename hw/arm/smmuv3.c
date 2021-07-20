@@ -1630,6 +1630,26 @@ static int smmuv3_notify_flag_changed(IOMMUMemoryRegion *iommu,
     return 0;
 }
 
+static int smmuv3_set_attr(IOMMUMemoryRegion *iommu,
+                           enum IOMMUMemoryRegionAttr attr,
+                           int data)
+{
+    if (attr == IOMMU_ATTR_VFIO_VMID) {
+        SMMUDevice *sdev = container_of(iommu, SMMUDevice, iommu);
+
+        if (!sdev) {
+            return -EINVAL;
+        }
+
+        if (data >= 0) {
+            SMMUv3State *s = sdev->smmu;
+            s->vmid = data;
+        }
+        return 0;
+    }
+    return -EINVAL;
+}
+
 static int smmuv3_get_attr(IOMMUMemoryRegion *iommu,
                            enum IOMMUMemoryRegionAttr attr,
                            void *data)
@@ -1639,6 +1659,16 @@ static int smmuv3_get_attr(IOMMUMemoryRegion *iommu,
         return 0;
     } else if (attr == IOMMU_ATTR_MSI_TRANSLATE) {
         *(bool *) data = true;
+        return 0;
+    } else if (attr == IOMMU_ATTR_VFIO_VMID) {
+        SMMUDevice *sdev = container_of(iommu, SMMUDevice, iommu);
+
+        if (!sdev) {
+            *(int *) data = 0;
+        } else {
+            SMMUv3State *s = sdev->smmu;
+            *(int *) data = s->vmid;
+        }
         return 0;
     }
     return -EINVAL;
@@ -1721,6 +1751,7 @@ static void smmuv3_iommu_memory_region_class_init(ObjectClass *klass,
 
     imrc->translate = smmuv3_translate;
     imrc->notify_flag_changed = smmuv3_notify_flag_changed;
+    imrc->set_attr = smmuv3_set_attr;
     imrc->get_attr = smmuv3_get_attr;
     imrc->inject_faults = smmuv3_inject_faults;
 }
