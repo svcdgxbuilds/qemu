@@ -82,12 +82,28 @@ typedef struct SMMUTransCfg {
     uint32_t iotlb_misses;     /* counts IOTLB misses for this asid */
 } SMMUTransCfg;
 
+typedef struct SMMUHwpt {
+    void *smmu;
+    dma_addr_t s1ptr;
+    EventNotifier notifier;
+    void (*fault_handler)(void *smmu, struct iommu_fault *buf);
+
+    uint32_t hwpt_id;
+    uint32_t s2_hwpt_id;
+    int iommufd;
+    int eventfd;
+    int fault_fd;
+    uint32_t fault_tail_index;
+    QLIST_ENTRY(SMMUHwpt) next;
+} SMMUHwpt;
+
 typedef struct SMMUDevice {
     void               *smmu;
     PCIBus             *bus;
     int                devfn;
     IOMMUMemoryRegion  iommu;
     IOMMUFDDevice      *idev;
+    SMMUHwpt           *hwpt;
     AddressSpace       as;
     uint32_t           cfg_cache_hits;
     uint32_t           cfg_cache_misses;
@@ -179,5 +195,18 @@ void smmu_inv_notifiers_all(SMMUState *s);
 
 /* Unmap the range of all the notifiers registered to @mr */
 void smmu_inv_notifiers_mr(IOMMUMemoryRegion *mr);
+
+/* IOMMUFD helpers */
+int smmu_iommu_alloc_s1_hwpt(SMMUState *s, SMMUDevice *sdev, dma_addr_t s1ptr,
+                             union iommu_stage1_vendor *iommu_config,
+                             void (*fault_handler)(void *, struct iommu_fault *));
+void smmu_iommu_destroy_s1_hwpt(SMMUDevice *sdev);
+int smmu_iommu_invalidate_cache(SMMUDevice *sdev,
+                                struct iommu_cache_invalidate_info *cache_info);
+int smmu_iommu_send_page_response(SMMUDevice *sdev,
+                                  struct iommu_page_response *pg_resp);
+int smmu_iommu_alloc_host_pasid(SMMUState *s, uint32_t max,
+                                bool identical, uint32_t *pasid);
+int smmu_iommu_free_host_pasid(SMMUState *s, uint32_t pasid);
 
 #endif /* HW_ARM_SMMU_COMMON_H */
