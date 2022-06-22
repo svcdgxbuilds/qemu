@@ -92,6 +92,20 @@ typedef struct SMMUDevice {
     QLIST_ENTRY(SMMUDevice) next;
 } SMMUDevice;
 
+typedef struct SMMUHwpt {
+    void *smmu;
+    dma_addr_t s1ptr;
+    EventNotifier notifier;
+    void (*fault_handler)(void *smmu, struct iommu_fault *buf);
+
+    uint32_t hwpt_id;
+    int iommufd;
+    int eventfd;
+    int fault_fd;
+    uint32_t fault_tail_index;
+    QLIST_ENTRY(SMMUHwpt) next;
+} SMMUHwpt;
+
 typedef struct SMMUPciBus {
     PCIBus       *bus;
     SMMUDevice   *pbdev[]; /* Parent array is sparse, so dynamically alloc */
@@ -117,6 +131,7 @@ struct SMMUState {
     SMMUPciBus *smmu_pcibus_by_bus_num[SMMU_PCI_BUS_MAX];
     PCIBus *pci_bus;
     QLIST_HEAD(, SMMUDevice) devices_with_notifiers;
+    QLIST_HEAD(, SMMUHwpt) hwpts;
     uint8_t bus_num;
     PCIBus *primary_bus;
 };
@@ -176,5 +191,17 @@ void smmu_inv_notifiers_all(SMMUState *s);
 
 /* Unmap the range of all the notifiers registered to @mr */
 void smmu_inv_notifiers_mr(IOMMUMemoryRegion *mr);
+
+/* IOMMUFD helpers */
+int smmu_iommu_alloc_s1_hwpt(SMMUState *s, SMMUDevice *sdev, dma_addr_t s1ptr,
+                             union iommu_stage1_config *iommu_config,
+                             void (*fault_handler)(void *, struct iommu_fault *));
+int smmu_iommu_invalidate_cache(SMMUDevice *sdev,
+                                struct iommu_cache_invalidate_info *cache_info);
+int smmu_iommu_send_page_response(SMMUDevice *sdev,
+                                  struct iommu_page_response *pg_resp);
+int smmu_iommu_alloc_host_pasid(SMMUState *s, uint32_t max,
+                                bool identical, uint32_t *pasid);
+int smmu_iommu_free_host_pasid(SMMUState *s, uint32_t pasid);
 
 #endif /* HW_ARM_SMMU_COMMON_H */
