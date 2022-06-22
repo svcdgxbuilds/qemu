@@ -454,8 +454,33 @@ static AddressSpace *smmu_find_add_as(PCIBus *bus, void *opaque,
     return &sdev->as;
 }
 
+static int smmu_dev_set_iommu_device(PCIBus *bus, void *opaque,
+                                     int devfn, PCIDevice *dev,
+                                     IOMMUFDDevice *idev)
+{
+    SMMUState *s = opaque;
+    SMMUPciBus *sbus = g_hash_table_lookup(s->smmu_pcibus_by_busptr, bus);
+    SMMUDevice *sdev;
+
+    if (!sbus) {
+        sbus = g_malloc0(sizeof(SMMUPciBus) +
+                         sizeof(SMMUDevice *) * SMMU_PCI_DEVFN_MAX);
+        sbus->bus = bus;
+        g_hash_table_insert(s->smmu_pcibus_by_busptr, bus, sbus);
+    }
+
+    return 0;
+}
+
+static void smmu_dev_unset_iommu_device(PCIBus *bus, void *opaque,
+                                        int devfn, PCIDevice *dev)
+{
+}
+
 static const PCIIOMMUOps smmu_ops = {
     .get_address_space = smmu_find_add_as,
+    .set_iommu_device = smmu_dev_set_iommu_device,
+    .unset_iommu_device = smmu_dev_unset_iommu_device,
 };
 
 IOMMUMemoryRegion *smmu_iommu_mr(SMMUState *s, uint32_t sid)
