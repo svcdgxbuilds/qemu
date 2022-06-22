@@ -717,6 +717,121 @@ static const PCIIOMMUOps smmu_ops = {
     .unset_iommu_device = smmu_dev_unset_iommu_device,
 };
 
+int smmu_iommu_get_info(SMMUDevice *sdev, uint32_t *data_type,
+                        uint32_t data_len, void *data)
+{
+    if (!sdev || !sdev->idev) {
+        return -ENOENT;
+    }
+
+    return iommufd_device_get_info(sdev->idev, data_type, data_len, data);
+}
+
+void smmu_iommu_uninstall_nested_ste(SMMUDevice *sdev)
+{
+    SMMUHwpt *hwpt = sdev->hwpt;
+
+    if (!sdev || !hwpt || !sdev->idev) {
+        return;
+    }
+
+    /* Detach the device first from its current hwpt */
+    if (iommufd_device_detach_hwpt(sdev->idev)) {
+        error_report("Unable to detach dev to stage-1 HW pagetable");
+        return;
+    }
+
+    iommufd_backend_free_id(hwpt->iommufd, hwpt->hwpt_id);
+    g_free(hwpt);
+    sdev->hwpt = NULL;
+}
+
+/* IOMMUFD helpers */
+int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
+                                  uint32_t data_type, uint32_t data_len,
+                                  void *data)
+{
+    SMMUHwpt *hwpt = sdev->hwpt, *s2_hwpt;
+    IOMMUFDDevice *idev;
+    int ret;
+
+    if (!s || !sdev || !s->iommufd || !s->iommufd->s2_hwpt) {
+        return -ENOENT;
+    }
+
+    idev = sdev->idev;
+    if (!idev) {
+        return -ENOENT;
+    }
+
+    if (hwpt) {
+        smmu_iommu_uninstall_nested_ste(sdev);
+    }
+
+    hwpt = g_new0(SMMUHwpt, 1);
+    if (!hwpt) {
+        return -ENOMEM;
+    }
+
+    hwpt->smmu = sdev->smmu;
+    hwpt->iommufd = idev->iommufd->fd;
+
+    s2_hwpt = s->iommufd->s2_hwpt;
+
+    ret = iommufd_backend_alloc_hwpt(idev->iommufd->fd, idev->dev_id,
+                                     s2_hwpt->hwpt_id, 0, data_type, data_len,
+                                     data, &hwpt->hwpt_id);
+    if (ret) {
+        error_report("Unable to allocate stage-1 HW pagetable: %d", ret);
+        goto free;
+    }
+
+    /* Detach the device first from its current hwpt */
+    ret = iommufd_device_detach_hwpt(idev);
+    if (ret) {
+        error_report("Unable to attach dev to stage-1 HW pagetable: %d", ret);
+        goto free_hwpt;
+    }
+
+    ret = iommufd_device_attach_hwpt(idev, hwpt->hwpt_id);
+    if (ret) {
+        error_report("Unable to attach dev to stage-1 HW pagetable: %d", ret);
+        goto free_hwpt;
+    }
+
+    sdev->hwpt = hwpt;
+
+    return 0;
+free_hwpt:
+    iommufd_backend_free_id(hwpt->iommufd, hwpt->hwpt_id);
+free:
+    g_free(hwpt);
+    sdev->hwpt = NULL;
+
+    return ret;
+}
+
+int smmu_iommu_invalidate_cache(SMMUDevice *sdev, uint32_t type, uint32_t len,
+                                uint32_t *num, void *reqs)
+{
+    IOMMUFDDevice *idev;
+    SMMUHwpt *hwpt;
+
+    if (!sdev) {
+        return -ENOENT;
+    }
+
+    idev = sdev->idev;
+    hwpt = sdev->hwpt;
+
+    if (!idev || !hwpt) {
+        return -ENOENT;
+    }
+
+    return iommufd_backend_invalidate_cache(idev->iommufd->fd, hwpt->hwpt_id,
+                                            type, len, num, reqs);
+}
+
 SMMUDevice *smmu_find_sdev(SMMUState *s, uint32_t sid)
 {
     uint8_t bus_n, devfn;
