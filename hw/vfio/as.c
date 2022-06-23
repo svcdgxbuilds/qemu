@@ -495,7 +495,10 @@ static void vfio_container_region_add(VFIOContainer *container,
             goto fail;
         }
         QLIST_INSERT_HEAD(&container->giommu_list, giommu, giommu_next);
-        memory_region_iommu_replay(giommu->iommu_mr, &giommu->n);
+
+        if (!container->nested) { /* FIXME */
+            memory_region_iommu_replay(giommu->iommu_mr, &giommu->n);
+        }
 
         return;
     }

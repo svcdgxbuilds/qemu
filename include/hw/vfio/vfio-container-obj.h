@@ -94,6 +94,7 @@ struct VFIOContainer {
 
     VFIOAddressSpace *space;
     Error *error;
+    bool nested; /* FIXME */
     bool initialized;
     bool dirty_pages_supported;
     uint64_t dirty_pgsizes;
