@@ -425,6 +425,9 @@ static int vfio_dma_map_ram_section(VFIOContainer *container,
      * actually populated parts - and update the mapping whenever we're notified
      * about changes.
      */
+    trace_vfio_dma_map_ram(iova, end, NULL);
+    error_report("---%s: mapped? %c", __func__, memory_region_is_mapped(section->mr) ? 'Y' : 'N');
+    error_report("---%s: ram? %c", __func__, memory_region_is_ram(section->mr) ? 'Y' : 'N');
     if (memory_region_has_ram_discard_manager(section->mr)) {
         vfio_register_ram_discard_listener(container, section);
         return 0;
@@ -651,7 +654,7 @@ static void vfio_container_region_add(VFIOContainer *container,
         }
         QLIST_INSERT_HEAD(&container->giommu_list, giommu, giommu_next);
 
-        if (!container->nested) { /* FIXME */
+        if (0 && !container->nested) { /* FIXME */
             memory_region_iommu_replay(giommu->iommu_mr, &giommu->n);
         }
 

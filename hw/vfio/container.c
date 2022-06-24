@@ -798,7 +798,7 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as,
 
         if (ret || !(info->flags & VFIO_IOMMU_INFO_PGSIZES)) {
             /* Assume 4k IOVA page size */
-            info->iova_pgsizes = 4096;
+            info->iova_pgsizes = sysconf(_SC_PAGE_SIZE);
         }
         vfio_host_win_add(bcontainer, 0, (hwaddr)-1, info->iova_pgsizes);
         bcontainer->pgsizes = info->iova_pgsizes;
@@ -872,7 +872,7 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as,
             }
         } else {
             /* The default table uses 4K pages */
-            bcontainer->pgsizes = 0x1000;
+            bcontainer->pgsizes = sysconf(_SC_PAGE_SIZE);
             vfio_host_win_add(bcontainer, info.dma32_window_start,
                               info.dma32_window_start +
                               info.dma32_window_size - 1,
