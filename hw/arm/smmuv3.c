@@ -1006,6 +1006,36 @@ smmuv3_invalidate_ste(gpointer key, gpointer value, gpointer user_data)
     return true;
 }
 
+static void smmuv3_invalidate_asid(SMMUState *s, uint16_t asid)
+{
+#ifdef __linux__
+    struct iommu_cache_invalidate_info cache_info = {};
+    SMMUDevice *sdev;
+
+    if (s->iommufd < 0) {
+        return;
+    }
+
+    trace_smmuv3_invalidate_asid(asid);
+
+    QLIST_FOREACH(sdev, &s->devices_iommufd, next) {
+        if (!sdev->idev) {
+            continue;
+        }
+
+        cache_info.version = IOMMU_CACHE_INVALIDATE_INFO_VERSION_1;
+        cache_info.cache = IOMMU_CACHE_INV_TYPE_IOTLB;
+        cache_info.granularity = IOMMU_INV_GRANU_PASID;
+        cache_info.granu.addr_info.flags = IOMMU_INV_ADDR_FLAGS_ARCHID;
+        cache_info.granu.addr_info.archid = asid;
+
+        if (smmu_iommu_invalidate_cache(sdev, &cache_info)) {
+            error_report("Cache flush failed");
+        }
+    }
+#endif
+}
+
 static int smmuv3_cmdq_consume(SMMUv3State *s)
 {
     SMMUState *bs = ARM_SMMU(s);
@@ -1114,6 +1144,7 @@ static int smmuv3_cmdq_consume(SMMUv3State *s)
 
             trace_smmuv3_cmdq_tlbi_nh_asid(asid);
             smmu_inv_notifiers_all(&s->smmu_state);
+            smmuv3_invalidate_asid(bs, asid);
             smmu_iotlb_inv_asid(bs, asid);
             break;
         }
