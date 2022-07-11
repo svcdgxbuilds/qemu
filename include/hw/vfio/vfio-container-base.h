@@ -105,8 +105,10 @@ typedef struct VFIOContainerOps {
  */
 struct VFIOContainer {
     const VFIOContainerOps *ops;
+    MemoryListener prereg_listener;
     VFIOAddressSpace *space;
     Error *error;
+    bool nested; /* FIXME */
     bool initialized;
     bool dirty_pages_supported;
     uint64_t dirty_pgsizes;
