@@ -2731,14 +2731,11 @@ static void vtd_dma_fault_notifier_handler(void *opaque)
     g_free(queue_buffer);
 }
 
-static void vtd_init_stage1_config_data(union iommu_stage1_config *config,
+static void vtd_init_stage1_config_data(struct iommu_user_intel_vtd *vtd,
                                         VTDPASIDEntry *pe)
 {
-    struct iommu_stage1_config_vtd *vtd;
+    memset(vtd, 0, sizeof(*vtd));
 
-    memset(config, 0, sizeof(*config));
-
-    vtd = &config->vtd;
     vtd->flags =  (VTD_SM_PASID_ENTRY_SRE_BIT(pe->val[2]) ?
                                         IOMMU_VTD_PGTBL_SRE : 0) |
                   (VTD_SM_PASID_ENTRY_WPE_BIT(pe->val[2]) ?
@@ -2753,6 +2750,7 @@ static void vtd_init_stage1_config_data(union iommu_stage1_config *config,
                                         IOMMU_VTD_PGTBL_EMTE : 0) |
                   (VTD_SM_PASID_ENTRY_CD_BIT(pe->val[1]) ?
                                         IOMMU_VTD_PGTBL_CD : 0);
+    vtd->s1_pgtbl = vtd_pe_get_flpt_base(pe);
     vtd->addr_width = vtd_pe_get_fl_aw(pe);
     vtd->pat = VTD_SM_PASID_ENTRY_PAT(pe->val[1]);
     vtd->emt = VTD_SM_PASID_ENTRY_EMT(pe->val[1]);
@@ -2769,8 +2767,9 @@ static int vtd_get_s2_hwpt(IntelIOMMUState *s, IOMMUFDDevice *idev,
         s->s2_hwpt->users++;
         return 0;
     }
-    ret = iommufd_backend_alloc_s2_hwpt(idev->iommufd, idev->dev_id,
-                                        idev->ioas_id, s2_hwpt);
+    ret = iommufd_backend_alloc_user_hwpt(idev->iommufd, idev->dev_id, false,
+                                          IOMMU_USER_HWPT_S2, idev->ioas_id,
+                                          0, NULL, 0, &hwpt_id);
     if (!ret) {
         s->s2_hwpt = g_malloc0(sizeof(*s->s2_hwpt));
         s->s2_hwpt->hwpt_id = *s2_hwpt;
@@ -2798,7 +2797,7 @@ static void vtd_put_s2_hwpt(IntelIOMMUState *s)
 static int vtd_init_fl_hwpt(IntelIOMMUState *s, VTDHwpt *hwpt,
                             IOMMUFDDevice *idev, VTDPASIDEntry *pe)
 {
-    union iommu_stage1_config config;
+    struct iommu_user_intel_vtd vtd;
     EventNotifier *n = &hwpt->notifier;
     uint32_t hwpt_id, s2_hwptid;
     int ret, fd, fault_data_fd;
@@ -2812,7 +2811,7 @@ static int vtd_init_fl_hwpt(IntelIOMMUState *s, VTDHwpt *hwpt,
 
     fd = event_notifier_get_fd(n);
 
-    vtd_init_stage1_config_data(&config, pe);
+    vtd_init_stage1_config_data(&vtd, pe);
 
     ret = vtd_get_s2_hwpt(s, idev, &s2_hwptid);
     if (ret) {
@@ -2820,10 +2819,20 @@ static int vtd_init_fl_hwpt(IntelIOMMUState *s, VTDHwpt *hwpt,
         return ret;
     }
 
-    ret = iommufd_backend_alloc_s1_hwpt(idev->iommufd, idev->dev_id,
-                                vtd_pe_get_flpt_base(pe), s2_hwptid,
-                                fd, &config, &hwpt_id, &fault_data_fd);
+    ret = iommufd_backend_alloc_user_hwpt(idev->iommufd, idev->dev_id, true,
+                                          IOMMU_USER_HWPT_S1, s2_hwptid,
+                                          IOMMU_USER_INTEL_VTD, &vtd,
+                                          sizeof(vtd), &hwpt_id);
     if (ret) {
+        vtd_put_s2_hwpt(s);
+        event_notifier_cleanup(n);
+        return ret;
+    }
+
+    ret = iommufd_backend_add_user_event(idev->iommufd, idev->dev_id, hwpt_id,
+                                         fd, &fault_data_fd);
+    if (ret) {
+        iommufd_backend_free_id(idev->iommufd, hwpt_id);
         vtd_put_s2_hwpt(s);
         event_notifier_cleanup(n);
         return ret;
