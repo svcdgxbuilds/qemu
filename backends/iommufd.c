@@ -243,61 +243,55 @@ int iommufd_backend_copy_dma(IOMMUFDBackend *be, uint32_t src_ioas,
     return !ret ? 0 : -errno;
 }
 
-int iommufd_backend_alloc_s1_hwpt(int iommufd, uint32_t dev_id,
-                          hwaddr s1_ptr, uint32_t s2_hwpt,
-                          int fd, union iommu_stage1_config *s1_config,
-                          uint32_t *out_s1_hwpt, int *out_fault_fd)
+int iommufd_backend_alloc_user_hwpt(int iommufd, uint32_t dev_id,
+                                    uint32_t hwpt_type, uint32_t parent,
+                                    uint32_t data_type, void *data,
+                                    uint32_t data_len, uint32_t *out_hwpt)
 {
     int ret;
-    struct iommu_hwpt_s1_data s1_data = {
-	.stage2_hwpt_id = s2_hwpt,
-        .stage1_config_len = sizeof(*s1_config),
-        .stage1_config_uptr = (uint64_t)s1_config,
-        .stage1_ptr = s1_ptr,
-        .eventfd = fd,
-    };
     struct iommu_alloc_user_hwpt alloc_hwpt = {
         .size = sizeof(struct iommu_alloc_user_hwpt),
         .flags = 0,
         .dev_id = dev_id,
-        .hwpt_type = IOMMU_USER_HWPT_S1,
-        .data_len = sizeof(s1_data),
+        .hwpt_type = hwpt_type,
+        .parent_id = parent,
+        .data_type = data_type,
+        .data_len = data_len,
         .reserved = 0,
-        .data_uptr = (uint64_t)&s1_data,
+        .data_uptr = (uint64_t)data,
     };
 
     ret = ioctl(iommufd, IOMMU_ALLOC_USER_HWPT, &alloc_hwpt);
-    trace_iommufd_backend_alloc_s1_hwpt(iommufd, dev_id, s1_ptr,
-                                s2_hwpt, fd, (uint64_t)s1_config, ret);
+    trace_iommufd_backend_alloc_user_hwpt(iommufd, dev_id, hwpt_type, parent,
+                                          data_type, (uint64_t)data, ret);
     if (ret) {
-        error_report("IOMMU_ALLOC_USER_HWPT s1 failed: %s", strerror(errno));
+        error_report("IOMMU_ALLOC_USER_HWPT (%d type) failed: %s",
+                     hwpt_type, strerror(errno));
     } else {
-        *out_fault_fd = s1_data.out_fault_fd;
-        *out_s1_hwpt = alloc_hwpt.out_hwpt_id;
+        *out_hwpt = alloc_hwpt.out_hwpt_id;
     }
     return !ret ? 0 : -errno;
 }
 
-int iommufd_backend_alloc_s2_hwpt(int iommufd, uint32_t dev_id,
-                                  uint32_t ioas, uint32_t *out_s2_hwpt)
+int iommufd_backend_add_user_event(int iommufd, uint32_t dev_id, uint32_t hwpt,
+                                   int eventfd, int *out_fd)
 {
     int ret;
-    struct iommu_alloc_user_hwpt alloc_hwpt = {
-        .size = sizeof(struct iommu_alloc_user_hwpt),
+    struct iommu_add_user_event add_event = {
+        .size = sizeof(struct iommu_add_user_event),
         .flags = 0,
+        .type = IOMMU_USER_EVENT_FAUT,
         .dev_id = dev_id,
-        .hwpt_type = IOMMU_USER_HWPT_S2,
-        .data_len = sizeof(ioas),
-        .reserved = 0,
-        .data_uptr = (uint64_t)&ioas,
+        .hwpt_id = hwpt,
+        .eventfd = eventfd,
     };
 
-    ret = ioctl(iommufd, IOMMU_ALLOC_USER_HWPT, &alloc_hwpt);
-    trace_iommufd_backend_alloc_s2_hwpt(iommufd, dev_id, ioas, ret);
+    ret = ioctl(iommufd, IOMMU_ADD_USER_EVENT, &add_event);
+    trace_iommufd_backend_add_user_event(iommufd, dev_id, hwpt, eventfd, ret);
     if (ret) {
-        error_report("IOMMU_ALLOC_USER_HWPT s2 failed: %s", strerror(errno));
+        error_report("IOMMU_ADD_USER_EVENT failed: %s", strerror(errno));
     } else {
-        *out_s2_hwpt = alloc_hwpt.out_hwpt_id;
+        *out_fd = add_event.out_fd;
     }
     return !ret ? 0 : -errno;
 }
