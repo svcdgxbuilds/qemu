@@ -2731,7 +2731,7 @@ static void vtd_dma_fault_notifier_handler(void *opaque)
     g_free(queue_buffer);
 }
 
-static void vtd_init_stage1_config_data(union iommu_stage1_config *config,
+static void vtd_init_stage1_config_data(union iommu_stage1_vendor *config,
                                         VTDPASIDEntry *pe)
 {
     struct iommu_stage1_config_vtd *vtd;
@@ -2798,7 +2798,7 @@ static void vtd_put_s2_hwpt(IntelIOMMUState *s)
 static int vtd_init_fl_hwpt(IntelIOMMUState *s, VTDHwpt *hwpt,
                             IOMMUFDDevice *idev, VTDPASIDEntry *pe)
 {
-    union iommu_stage1_config config;
+    union iommu_stage1_vendor config;
     EventNotifier *n = &hwpt->notifier;
     uint32_t hwpt_id, s2_hwptid;
     int ret, fd, fault_data_fd;

@@ -245,14 +245,14 @@ int iommufd_backend_copy_dma(IOMMUFDBackend *be, uint32_t src_ioas,
 
 int iommufd_backend_alloc_s1_hwpt(int iommufd, uint32_t dev_id,
                           hwaddr s1_ptr, uint32_t s2_hwpt,
-                          int fd, union iommu_stage1_config *s1_config,
+                          int fd, union iommu_stage1_vendor *s1_config,
                           uint32_t *out_s1_hwpt, int *out_fault_fd)
 {
     int ret;
     struct iommu_hwpt_s1_data s1_data = {
 	.stage2_hwpt_id = s2_hwpt,
-        .stage1_config_len = sizeof(*s1_config),
-        .stage1_config_uptr = (uint64_t)s1_config,
+        .stage1_vendor_len = sizeof(*s1_config),
+        .stage1_vendor_uptr = (uint64_t)s1_config,
         .stage1_ptr = s1_ptr,
         .eventfd = fd,
     };
