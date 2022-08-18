@@ -59,6 +59,7 @@ struct IOMMUFDDevice {
     int iommufd;
     uint32_t dev_id;
     uint32_t ioas_id;
+    uint32_t hwpt_id;
     bool initialized;
 };
 
@@ -72,7 +73,8 @@ int iommufd_device_get_resv_iova(IOMMUFDDevice *idev,
                                  struct iommu_resv_iova_range **resv);
 void iommufd_device_init(void *_idev, size_t instance_size,
                          const char *mrtypename, int fd,
-                         uint32_t dev_id, uint32_t ioas_id);
+                         uint32_t dev_id, uint32_t ioas_id,
+                         uint32_t hwpt_id);
 void iommufd_device_destroy(IOMMUFDDevice *idev);
 
 #endif
