@@ -420,6 +420,23 @@ static int iommufd_attach_device(VFIODevice *vbasedev, AddressSpace *as,
     bcontainer = &container->bcontainer;
     vfio_container_init(bcontainer, space, &iommufd_container_ops);
 
+    if (memory_region_is_iommu(as->root)) {
+        IOMMUMemoryRegion *iommu_mr = IOMMU_MEMORY_REGION(as->root);
+
+        ret = memory_region_iommu_get_attr(iommu_mr, IOMMU_ATTR_VFIO_NESTED,
+                                           (void *)&bcontainer->nested);
+        if (ret) {
+            bcontainer->nested.supported = false;
+            bcontainer->nested.data_type = IOMMU_HWPT_DATA_NONE;
+            bcontainer->nested.data_len = 0;
+            bcontainer->nested.data = NULL;
+        }
+        trace_vfio_iommufd_nested(vbasedev->iommufd->fd,
+                                  bcontainer->nested.supported,
+                                  bcontainer->nested.data_type,
+                                  (uint64_t)bcontainer->nested.data);
+    }
+
     ret = vfio_device_attach_container(vbasedev, container, &err);
     if (ret) {
         /* todo check if any other thing to do */
