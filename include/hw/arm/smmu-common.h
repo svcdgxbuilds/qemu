@@ -124,6 +124,7 @@ typedef struct SMMUDevice {
     AddressSpace       as;
     uint32_t           cfg_cache_hits;
     uint32_t           cfg_cache_misses;
+    struct iommu_hw_info_arm_smmuv3 info;
     QLIST_ENTRY(SMMUDevice) next;
 } SMMUDevice;
 
@@ -215,6 +216,8 @@ void smmu_iotlb_inv_iova(SMMUState *s, int asid, int vmid, dma_addr_t iova,
 void smmu_inv_notifiers_all(SMMUState *s);
 
 /* IOMMUFD helpers */
+int smmu_iommu_get_info(SMMUDevice *sdev, uint32_t *data_type,
+                        uint32_t data_len, void *data);
 int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
                                   uint32_t data_type, uint32_t data_len,
                                   void *data);
