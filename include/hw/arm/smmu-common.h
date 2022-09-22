@@ -124,6 +124,7 @@ typedef struct SMMUDevice {
     AddressSpace       as;
     uint32_t           cfg_cache_hits;
     uint32_t           cfg_cache_misses;
+    struct iommu_hw_info_arm_smmuv3 info;
     QLIST_ENTRY(SMMUDevice) next;
 } SMMUDevice;
 
