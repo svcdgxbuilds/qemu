@@ -98,6 +98,7 @@ typedef struct SMMUDevice {
     AddressSpace       as;
     uint32_t           cfg_cache_hits;
     uint32_t           cfg_cache_misses;
+    struct iommu_hw_info_smmuv3 info;
     QLIST_ENTRY(SMMUDevice) next;
 } SMMUDevice;
 
@@ -191,4 +192,6 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
 void smmu_iommu_uninstall_nested_ste(SMMUDevice *sdev);
 int smmu_iommu_invalidate_cache(SMMUDevice *sdev, uint32_t data_type,
                                 uint32_t data_len, void *data);
+int smmu_iommu_get_info(SMMUDevice *sdev, uint32_t *data_type,
+                        uint32_t data_len, void *data);
 #endif /* HW_ARM_SMMU_COMMON_H */
