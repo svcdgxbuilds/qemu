@@ -110,6 +110,40 @@ again:
     return ret;
 }
 
+int iommufd_set_dev_data(IOMMUFDDevice *idev, void *data, uint32_t data_len)
+{
+    struct iommu_set_dev_data set_data = {
+        .size = sizeof(set_data),
+	.dev_id = idev->dev_id,
+	.data_uptr = (uint64_t)data,
+	.data_len = data_len,
+    };
+    int ret;
+
+    ret = ioctl(idev->iommufd, IOMMU_SET_DEV_DATA, &set_data);
+    if (ret) {
+        error_report("Failed to set data %d", ret);
+    }
+
+    return ret;
+}
+
+int iommufd_unset_dev_data(IOMMUFDDevice *idev)
+{
+    struct iommu_unset_dev_data unset_data = {
+        .size = sizeof(unset_data),
+	.dev_id = idev->dev_id,
+    };
+    int ret;
+
+    ret = ioctl(idev->iommufd, IOMMU_UNSET_DEV_DATA, &unset_data);
+    if (ret) {
+        error_report("Failed to unset data %d", ret);
+    }
+
+    return ret;
+}
+
 void iommufd_device_init(void *_idev, size_t instance_size,
                          const char *mrtypename, int fd,
                          uint32_t dev_id, uint32_t ioas_id,

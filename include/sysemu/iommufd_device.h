@@ -76,5 +76,7 @@ void iommufd_device_init(void *_idev, size_t instance_size,
                          uint32_t dev_id, uint32_t ioas_id,
                          uint32_t hwpt_id);
 void iommufd_device_destroy(IOMMUFDDevice *idev);
+int iommufd_set_dev_data(IOMMUFDDevice *idev, void *data, uint32_t data_len);
+int iommufd_unset_dev_data(IOMMUFDDevice *idev);
 
 #endif
