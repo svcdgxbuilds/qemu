@@ -531,6 +531,7 @@ void smmu_iommu_uninstall_nested_ste(SMMUDevice *sdev)
         return;
     }
 
+    iommufd_device_unset_data(sdev->idev);
     iommufd_backend_free_id(hwpt->iommufd, hwpt->hwpt_id);
     g_free(hwpt);
     sdev->hwpt = NULL;
@@ -541,6 +542,9 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
                                   uint32_t data_type, uint32_t data_len,
                                   void *data)
 {
+    struct iommu_device_data_arm_smmuv3 dev_data = {
+        .sid = smmu_get_sid(sdev),
+    };
     SMMUHwpt *hwpt = sdev->hwpt;
     IOMMUFDDevice *idev;
     int ret;
@@ -585,6 +589,12 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
     if (ret) {
         error_report("Unable to attach dev to stage-1 HW pagetable: %d", ret);
         goto free_hwpt;
+    }
+
+    ret = iommufd_device_set_data(idev, &dev_data, sizeof(dev_data));
+    if (ret) {
+        error_report("failed to set_dev_data for bus=%d, devfn=%d, dev_id=%d",
+                     pci_bus_num(sdev->bus), sdev->devfn, idev->dev_id);
     }
 
     return 0;
