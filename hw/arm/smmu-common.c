@@ -480,6 +480,7 @@ static int smmu_dev_set_iommu_device(PCIBus *bus, void *opaque,
 
     sdev->idev = idev;
 
+    iommufd_device_set_rid(idev, smmu_get_sid(sdev), 0);
     return 0;
 }
 
@@ -503,6 +504,7 @@ static void smmu_dev_unset_iommu_device(PCIBus *bus, void *opaque,
         return;
     }
 
+    iommufd_device_unset_rid(sdev->idev);
     sdev->idev = NULL;
 }
 
@@ -516,7 +518,13 @@ void smmu_iommu_uninstall_nested_ste(SMMUDevice *sdev)
 {
     SMMUHwpt *hwpt = sdev->hwpt;
 
-    if (!sdev || !hwpt) {
+    if (!sdev || !hwpt || !sdev->idev) {
+        return;
+    }
+
+    /* Detach the device first from its current hwpt */
+    if (iommufd_device_detach_hwpt(sdev->idev)) {
+        error_report("Unable to detach dev to stage-1 HW pagetable");
         return;
     }
 
@@ -554,6 +562,7 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
     sdev->hwpt = hwpt;
 
     hwpt->smmu = sdev->smmu;
+    hwpt->iommufd = idev->iommufd;
 
     ret = iommufd_backend_alloc_hwpt(idev->iommufd, idev->dev_id, idev->hwpt_id,
                                      data_type, data_len, data, &hwpt->hwpt_id);
