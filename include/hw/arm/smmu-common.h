@@ -90,6 +90,8 @@ typedef struct SMMUHwpt {
     void *smmu;
     uint32_t hwpt_id;
     int iommufd;
+    void *cmdq_page;
+    uint32_t cmdq_page_size;
 } SMMUHwpt;
 
 typedef struct SMMUDevice {
