@@ -539,6 +539,7 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
                                   void *data)
 {
     size_t page_size = qemu_real_host_page_size();
+    size_t mmap_size = 4 * 1024;
     SMMUHwpt *hwpt = sdev->hwpt;
     IOMMUFDDevice *idev;
     int ret;
@@ -572,15 +573,15 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
         goto free;
     }
 
-#if 1
-    hwpt->cmdq_page = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+#if 0
+    hwpt->cmdq_page = mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED,
                            idev->iommufd, hwpt->hwpt_id * page_size);
     if (hwpt->cmdq_page == MAP_FAILED) {
         error_report("Unable to mmap for iommufd=%d: %s", idev->iommufd, strerror(errno));
         goto free_hwpt;
     }
 
-    hwpt->cmdq_page_size = page_size;
+    hwpt->cmdq_page_size = mmap_size;
 #endif
 
     /* Detach the device first from its current hwpt */
@@ -598,7 +599,7 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
 
     return 0;
 out_munmap:
-    munmap(hwpt->cmdq_page, page_size);
+    munmap(hwpt->cmdq_page, mmap_size);
 free_hwpt:
     iommufd_backend_free_id(hwpt->iommufd, hwpt->hwpt_id);
 free:
