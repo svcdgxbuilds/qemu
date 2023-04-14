@@ -1111,6 +1111,7 @@ static void smmuv3_config_ste(SMMUState *bs, uint32_t sid)
     struct iommu_hwpt_arm_smmuv3 iommu_config = {};
     SMMUTransCfg *cfg;
     SMMUDevice *sdev;
+    STE ste;
     int ret;
 
     if (!mr) {
@@ -1133,18 +1134,18 @@ static void smmuv3_config_ste(SMMUState *bs, uint32_t sid)
         return;
     }
 
-    iommu_config.s1ctxptr = cfg->s1ctxptr;
-    iommu_config.s1cdmax = cfg->s1cdmax;
-    iommu_config.s1fmt = cfg->s1fmt;
-    iommu_config.s1dss = cfg->s1dss;
-
-    trace_smmuv3_config_ste(mr->parent_obj.name, cfg->s1ctxptr);
+    ret = smmu_find_ste(sdev->smmu, sid, &ste, &event);
+    if (ret) {
+        error_report("Unable to find Stream Table Entry: %d", ret);
+    }
+    iommu_config.ste_len = sizeof(STE);
+    iommu_config.ste_uptr = (uint64_t)&ste;
+    trace_smmuv3_config_ste(mr->parent_obj.name, STE_CTXPTR(&ste));
 
     ret = smmu_iommu_install_nested_ste(bs, sdev, IOMMU_HWPT_TYPE_ARM_SMMUV3,
                                         sizeof(iommu_config), &iommu_config);
     if (ret) {
         error_report("Unable to alloc Stage-1 HW Page Table: %d", ret);
-        return;
     }
 #endif
 }
@@ -1212,8 +1213,12 @@ static int smmuv3_invalidate_cache_test(SMMUState *s, SMMUQueue *q, uint32_t *co
         .cmdq_cons = *cons,
     };
     SMMUDevice *sdev;
+    int ret = -ENODEV;
     void *buf;
-    int ret;
+
+    if (!s->iommufd) {
+	    return -ENODEV;
+    }
 
     buf = address_space_map(&address_space_memory, Q_BASE(q), &len,
                             false, MEMTXATTRS_UNSPECIFIED);
@@ -1230,11 +1235,10 @@ static int smmuv3_invalidate_cache_test(SMMUState *s, SMMUQueue *q, uint32_t *co
         if (ret || data.cmdq_prod != data.cmdq_cons) {
             error_report("failed to invalidate TLB: ret=%d, prod=0x%x, cons=0x%x",
                          ret, data.cmdq_prod, data.cmdq_cons);
-            return ret;
         }
     }
     address_space_unmap(&address_space_memory, buf, len, false, 0);
-    return 0;
+    return ret;
 }
 
 static int smmuv3_cmdq_consume(SMMUv3State *s)
@@ -1391,9 +1395,7 @@ static int smmuv3_cmdq_consume(SMMUv3State *s)
          */
         queue_cons_incr(q);
     }
-    if (bs->iommufd && report) {
-        q->cons = cons_save;
-        smmuv3_invalidate_cache_test(bs, q, &cons_save);
+    if (report && !smmuv3_invalidate_cache_test(bs, q, &cons_save)) {
         smmu_write_cmdq_err(s, cons_save >> 24);
         q->cons = cons_save;
     }
