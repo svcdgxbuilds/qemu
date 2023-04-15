@@ -1209,8 +1209,8 @@ static int smmuv3_invalidate_cache_test(SMMUState *s, SMMUQueue *q, uint32_t *co
     struct iommu_hwpt_invalidate_arm_smmuv3 data = {
         .cmdq_entry_size = q->entry_size,
         .cmdq_log2size = q->log2size,
-        .cmdq_prod = Q_PROD(q),
-        .cmdq_cons = *cons,
+        .cmdq_prod = q->prod,
+        .cmdq_cons_uptr = (uint64_t)cons,
     };
     SMMUDevice *sdev;
     int ret = -ENODEV;
@@ -1224,17 +1224,16 @@ static int smmuv3_invalidate_cache_test(SMMUState *s, SMMUQueue *q, uint32_t *co
                             false, MEMTXATTRS_UNSPECIFIED);
     if (!buf || !len)
         return -ENOMEM;
-    data.cmdq_base = (uint64_t)buf;
+    data.cmdq_uptr = (uint64_t)buf;
 
     QLIST_FOREACH(sdev, &s->devices_with_notifiers, next) {
-        if (!sdev->hwpt)
+        if (!sdev->hwpt || !sdev->idev)
             continue;
         ret = smmu_iommu_invalidate_cache(sdev, IOMMU_HWPT_TYPE_ARM_SMMUV3,
                                     sizeof(data), &data);
-        *cons = data.cmdq_cons;
-        if (ret || data.cmdq_prod != data.cmdq_cons) {
+        if (ret) {
             error_report("failed to invalidate TLB: ret=%d, prod=0x%x, cons=0x%x",
-                         ret, data.cmdq_prod, data.cmdq_cons);
+                         ret, q->prod, *cons);
         }
     }
     address_space_unmap(&address_space_memory, buf, len, false, 0);
@@ -1260,7 +1259,7 @@ static int smmuv3_cmdq_consume(SMMUv3State *s)
      * or old value.
      */
 
-    cons_save = Q_CONS(q);
+    cons_save = q->cons;
     while (!smmuv3_q_empty(q)) {
         uint32_t pending = s->gerror ^ s->gerrorn;
         Cmd cmd;
