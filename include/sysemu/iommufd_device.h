@@ -61,6 +61,8 @@ struct IOMMUFDDevice {
     uint32_t ioas_id;
     uint32_t hwpt_id;
     bool initialized;
+    void *dev_data;
+    uint32_t dev_data_len;
 };
 
 int iommufd_device_attach_hwpt(IOMMUFDDevice *idev,

@@ -276,9 +276,18 @@ static int vfio_device_attach_container(VFIODevice *vbasedev,
         .flags = 0,
         .pt_id = container->ioas_id,
     };
+    IOMMUFDDevice *idev = &vbasedev->idev;
     VFIOIOASHwpt *hwpt;
     uint32_t hwpt_id;
     int ret;
+
+    if (idev->dev_data_len) {
+        bind.flags |= VFIO_DEVICE_BIND_IOMMUFD_FLAG_DATA;
+        bind.dev_data_uptr = (uint64_t)idev->dev_data;
+        bind.dev_data_len = idev->dev_data_len;
+	printf("%s data_uptr =0x%lx, data_len=%x\n", __func__, (uint64_t)idev->dev_data, idev->dev_data_len);
+    }
+    printf("%s data_uptr =0x%llx, data_len=%x\n", __func__, bind.dev_data_uptr, bind.dev_data_len);
 
     /*
      * Add device to kvm-vfio to be prepared for the tracking

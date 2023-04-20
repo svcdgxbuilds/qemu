@@ -474,11 +474,17 @@ static int smmu_dev_set_iommu_device(PCIBus *bus, void *opaque,
     SMMUPciBus *sbus = smmu_get_sbus(s, bus);
     SMMUDevice *sdev = smmu_get_sdev(s, sbus, bus, devfn);
 
+    printf("%s data_uptr =0x%lx, data_len=%x\n", __func__, (uint64_t)idev->dev_data, idev->dev_data_len);
+    idev->dev_data = &sdev->data;
+    idev->dev_data_len = sizeof(sdev->data);
+    printf("%s data_uptr =0x%lx, data_len=%x\n", __func__, (uint64_t)idev->dev_data, idev->dev_data_len);
+
     if (!s->iommufd || s->iommufd->fd < 0) {
         return -ENOENT;
     }
 
     sdev->idev = idev;
+    sdev->data.sid = smmu_get_sid(sdev);
 
     return 0;
 }

@@ -2998,6 +2998,14 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
         goto error;
     }
 
+    if (vbasedev->iommufd) {
+        ret = pci_device_set_iommu_device(pdev, &vbasedev->idev);
+        if (ret) {
+            error_setg(errp, "Failed to set iommu_device");
+            goto out_teardown;
+        }
+    }
+
     ret = vfio_attach_device(vbasedev,
                              pci_device_iommu_address_space(pdev), errp);
     if (ret) {
@@ -3106,14 +3114,6 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
     }
 
     vfio_bars_register(vdev);
-
-    if (vbasedev->iommufd) {
-        ret = pci_device_set_iommu_device(pdev, &vbasedev->idev);
-        if (ret) {
-            error_setg(errp, "Failed to set iommu_device");
-            goto out_teardown;
-        }
-    }
 
     ret = vfio_add_capabilities(vdev, errp);
     if (ret) {
