@@ -417,23 +417,23 @@ struct iommu_hwpt_intel_vtd {
 /**
  * struct iommu_hwpt_arm_smmuv3 - ARM SMMUv3 specific page table data
  *
- * @flags: page table entry attributes
- * @s2vmid: Virtual machine identifier
- * @s1ctxptr: Stage-1 context descriptor pointer
- * @s1cdmax: Number of CDs pointed to by s1ContextPtr
- * @s1fmt: Stage-1 Format
- * @s1dss: Default substream
+ * @flags: Page table entry attributes
+ * @event_len: Length of the user Stream Table Entry
+ * @ste_uptr: User pointer to a user Stream Table Entry
+ * @event_len: Length of the returning event
+ * @out_event_uptr: User pointer to a returning event, to report a C_BAD_STE upon
+ *                 an STE configuration failure
+ *
+ * If event_len or out_event_uptr is unset, remainning at value 0, an STE
+ * configuration failure during the hwpt allocation will not be reported.
  */
 struct iommu_hwpt_arm_smmuv3 {
 #define IOMMU_SMMUV3_FLAG_S2	(1 << 0) /* if unset, stage-1 */
-#define IOMMU_SMMUV3_FLAG_VMID	(1 << 1) /* vmid override */
 	__u64 flags;
-	__u32 s2vmid;
-	__u32 __reserved;
-	__u64 s1ctxptr;
-	__u64 s1cdmax;
-	__u64 s1fmt;
-	__u64 s1dss;
+	__u64 ste_len;
+	__aligned_u64 ste_uptr;
+	__u64 event_len;
+	__aligned_u64 out_event_uptr;
 };
 
 /**
@@ -581,6 +581,16 @@ struct iommu_hw_info {
 #define IOMMU_DEVICE_GET_HW_INFO _IO(IOMMUFD_TYPE, IOMMUFD_CMD_DEVICE_GET_HW_INFO)
 
 /**
+ * struct iommu_device_data_arm_smmuv3 - ARM SMMUv3 specific device data
+ * @sid: The Stream ID that is assigned in the user space
+ *
+ * This should be passed via the VFIO_DEVICE_BIND_IOMMUFD ioctl.
+ */
+struct iommu_device_data_arm_smmuv3 {
+	__u32 sid;
+};
+
+/**
  * enum iommu_vtd_qi_granularity - Intel VT-d specific granularity of
  *                                 queued invalidation
  * @IOMMU_VTD_QI_GRAN_DOMAIN: domain-selective invalidation
@@ -636,21 +646,23 @@ struct iommu_hwpt_invalidate_intel_vtd {
 
 /**
  * struct iommu_hwpt_invalidate_arm_smmuv3 - ARM SMMUv3 cahce invalidation info
- * @flags: boolean attributes of cache invalidation command
- * @opcode: opcode of cache invalidation command
- * @ssid: SubStream ID
- * @granule_size: page/block size of the mapping in bytes
- * @range: IOVA range to invalidate
+ * @cmdq_uptr: User pointer to a user command queue
+ * @cmdq_cons_uptr: User pointer to the consumer index of a user command queue,
+ *                  allowing kernel to read and also update the consumer index
+ *                  for a successful call or a failure with a CERROR_ILL code.
+ *                  This pointer must point to a __u32 type of memory location.
+ * @cmdq_prod: Producer index of user command queues
+ * @cmdq_entry_size: Entry size of a user command queue
+ * @cmdq_log2size: Queue size as log2(entries). Refer to 6.3.25 SMMU_CMDQ_BASE
+ * @__reserved: Must be 0
  */
 struct iommu_hwpt_invalidate_arm_smmuv3 {
-#define IOMMU_SMMUV3_CMDQ_TLBI_VA_LEAF	(1 << 0)
-	__u64 flags;
-	__u8 opcode;
-	__u8 padding[3];
-	__u32 asid;
-	__u32 ssid;
-	__u32 granule_size;
-	struct iommu_iova_range range;
+	__aligned_u64 cmdq_uptr;
+	__aligned_u64 cmdq_cons_uptr;
+	__u32 cmdq_prod;
+	__u32 cmdq_entry_size;
+	__u32 cmdq_log2size;
+	__u32 __reserved;
 };
 
 /**
