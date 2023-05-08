@@ -5,6 +5,7 @@
 #include "qemu/thread.h"
 #include "exec/hwaddr.h"
 #include "exec/cpu-common.h"
+#include "exec/memory.h"
 
 #define TYPE_IOMMUFD_BACKEND "iommufd"
 OBJECT_DECLARE_TYPE(IOMMUFDBackend, IOMMUFDBackendClass, IOMMUFD_BACKEND)
@@ -21,6 +22,8 @@ struct IOMMUFDBackend {
     bool owned;        /* is the /dev/iommu opened internally */
     QemuMutex lock;
     uint32_t users;
+    void *s2_hwpt;
+    MemoryListener listener;
 
     /*< public >*/
 };
