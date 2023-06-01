@@ -54,11 +54,6 @@ int vfio_container_dma_map(VFIOContainer *container,
         return -EINVAL;
     }
 
-    if (readonly) {
-        info_report("Skip readonly pages");
-        return 0;
-    }
-
     return container->ops->dma_map(container, iova, size, vaddr, readonly);
 }
 
