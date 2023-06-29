@@ -383,22 +383,30 @@ struct iommu_hwpt_vtd_s1 {
 };
 
 /**
- * struct iommu_hwpt_arm_smmuv3 - ARM SMMUv3 specific translation table data
+ * struct iommu_hwpt_arm_smmuv3 - ARM SMMUv3 specific translation table info
  *                                (IOMMU_HWPT_TYPE_ARM_SMMUV3)
  *
  * @flags: Translation table entry attributes
  * @ste_len: Length of the user Stream Table Entry
  * @ste_uptr: User pointer to a user Stream Table Entry
  * @event_len: Length of the returning event
- * @out_event_uptr: User pointer to a returning event, to report a C_BAD_STE upon
- *                  an STE configuration failure
+ * @out_event_uptr: User pointer to a returning event, to report a C_BAD_STE
+ *                  upon an STE configuration failure
  *
- * If event_len or out_event_uptr is unset, remainning at value 0, an STE
- * configuration failure during the hwpt allocation will not be reported.
+ * ARM SMMUv3 specific data to create page tables for a nested configuration.
  *
- * The data structure can be used to allocate a stage-2 translation table, in
- * which case only IOMMU_SMMUV3_FLAG_S2 would matter, i.e. all other ste_* and
- * envent_* inputs would be ignored.
+ * For a nested stage-1 translation table allocation, kernel will read all the
+ * information of a user space stage-1 Context Descriptor table from the given
+ * user space Stream Table Entry pointed by @ste_uptr. The @event_len and the
+ * @out_event_uptr in pair are optional. If they are both provided, kernel will
+ * report an STE error to the memory location pointed by @out_event_uptr, when
+ * the allocation fails due to some problem in the user space STE.
+ *
+ * As long as the SMMUv3 hardware supports a stage-1 page table, the default
+ * allocation of a page table in the kernel is always for a stage-1 type. So,
+ * this data structure can be also used to allocate a kernel-managed stage-2
+ * translation table, by setting IOMMU_SMMUV3_FLAG_S2 in the @flags, in which
+ * case only this flag matters and the kernel will ignore all other inputs.
  */
 struct iommu_hwpt_arm_smmuv3 {
 #define IOMMU_SMMUV3_FLAG_S2	(1 << 0) /* if unset, stage-1 */
@@ -438,8 +446,9 @@ enum iommu_hwpt_type {
  * underlying iommu driver's iommu_domain kernel object.
  *
  * A kernel-managed HWPT will be created with the mappings from the given
- * IOAS via the @pt_id. The @hwpt_type for this allocation must be set to
- * IOMMU_HWPT_TYPE_DEFAULT.
+ * IOAS via the @pt_id. The @hwpt_type for this allocation can be set to
+ * either IOMMU_HWPT_TYPE_DEFAULT or a pre-defined type corresponding to
+ * an I/O page table type supported by the underlying IOMMU hardware.
  *
  * A user-managed HWPT will be created from a given parent HWPT via the
  * @pt_id, in which the parent HWPT must be allocated previously via the
@@ -495,18 +504,27 @@ struct iommu_hw_info_vtd {
 };
 
 /**
- * struct iommu_hw_info_smmuv3 - ARM SMMUv3 device info
- *                               (IOMMU_HW_INFO_TYPE_ARM_SMMUV3)
+ * struct iommu_hw_info_arm_smmuv3 - ARM SMMUv3 hardware information
+ *                                   (IOMMU_HW_INFO_TYPE_ARM_SMMUV3)
  *
  * @flags: Must be set to 0
  * @__reserved: Must be 0
- * @idr: Implemented features for the SMMU Non-secure programming interface.
- *       Please refer to the chapters from 6.3.1 to 6.3.6 in the SMMUv3 Spec.
+ * @idr: Implemented features for ARM SMMU Non-secure programming interface
+ * @iidr: Information about the implementation and implementer of ARM SMMU,
+ *        and architecture version supported
+ * @aidr: ARM SMMU architecture version
+ * ( for the details of @idr, @iidr and @aidr, please refer to the chapters
+ *   from 6.3.1 to 6.3.6 in the SMMUv3 Spec )
+ *
+ * User space should read the underlying ARM SMMUv3 hardware information for
+ * the list of supported features.
  */
-struct iommu_hw_info_smmuv3 {
+struct iommu_hw_info_arm_smmuv3 {
 	__u32 flags;
 	__u32 __reserved;
 	__u32 idr[6];
+	__u32 iidr;
+	__u32 aidr;
 };
 
 /**
@@ -601,16 +619,6 @@ struct iommu_resv_iova_ranges {
 #define IOMMU_RESV_IOVA_RANGES _IO(IOMMUFD_TYPE, IOMMUFD_CMD_RESV_IOVA_RANGES)
 
 /**
- * struct iommu_device_data_arm_smmuv3 - ARM SMMUv3 specific device data
- * @sid: The Stream ID that is assigned in the user space
- *
- * This should be passed via the VFIO_DEVICE_BIND_IOMMUFD ioctl.
- */
-struct iommu_device_data_arm_smmuv3 {
-	__u32 sid;
-};
-
-/**
  * enum iommu_hwpt_vtd_s1_invalidate_flags - Flags for Intel VT-d
  *                                           stage-1 cache invalidation
  * @IOMMU_VTD_QI_FLAGS_LEAF: The LEAF flag indicates whether only the
@@ -669,7 +677,7 @@ struct iommu_hwpt_vtd_s1_invalidate {
 };
 
 /**
- * struct iommu_hwpt_arm_smmuv3_invalidate - ARM SMMUv3 cahce invalidation info
+ * struct iommu_hwpt_arm_smmuv3_invalidate - ARM SMMUv3 cahce invalidation
  *                                           (IOMMU_HWPT_TYPE_ARM_SMMUV3)
  * @cmdq_uptr: User pointer to a user command queue
  * @cmdq_cons_uptr: User pointer to the consumer index of a user command queue,
@@ -680,6 +688,11 @@ struct iommu_hwpt_vtd_s1_invalidate {
  * @cmdq_entry_size: Entry size of a user command queue
  * @cmdq_log2size: Queue size as log2(entries). Refer to 6.3.25 SMMU_CMDQ_BASE
  * @__reserved: Must be 0
+ *
+ * The ARM SMMUv3 specific invalidation data, in form of a user space command
+ * queue. Kernel will read the user space CMDQ, and execute all supported cache
+ * invalidation commands in the CMDQ, and then update its consumer index pointed
+ * by @cmdq_cons_uptr.
  *
  * Both the consumer index and the producer index should be in their raw forms,
  * i.e. the raw values out of the SMMU_CMDQ_PROD and SMMU_CMDQ_CONS registers,
@@ -714,6 +727,17 @@ struct iommu_hwpt_invalidate {
 	__aligned_u64 data_uptr;
 };
 #define IOMMU_HWPT_INVALIDATE _IO(IOMMUFD_TYPE, IOMMUFD_CMD_HWPT_INVALIDATE)
+/**
+ * struct iommu_dev_data_arm_smmuv3 - ARM SMMUv3 specific device data
+ * @sid: The Stream ID that is assigned in the user space
+ *
+ * The SMMUv3 specific user space data for a device that is behind an SMMU HW.
+ * The guest-level user data should be linked to the host-level kernel data,
+ * which will be used by user space cache invalidation commands.
+ */
+struct iommu_dev_data_arm_smmuv3 {
+	__u32 sid;
+};
 
 /**
  * struct iommu_set_dev_data - ioctl(IOMMU_SET_DEV_DATA)
