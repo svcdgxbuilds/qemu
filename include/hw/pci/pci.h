@@ -387,8 +387,16 @@ typedef struct PCIIOMMUOps {
      * @devfn: device and function number
      */
     AddressSpace * (*get_address_space)(PCIBus *bus, void *opaque, int devfn);
+    /**
+     * @set_iommu_device: set iommu device
+     * todo
+     */
     int (*set_iommu_device)(PCIBus *bus, void *opaque, int32_t devfn,
                             IOMMUFDDevice *idev, Error **errp);
+    /**
+     * @unset_iommu_device: unset iommu device
+     * todo
+     */
     void (*unset_iommu_device)(PCIBus *bus, void *opaque, int32_t devfn);
 } PCIIOMMUOps;
 
