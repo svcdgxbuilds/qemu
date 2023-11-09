@@ -143,6 +143,8 @@ struct SMMUState {
     /* <private> */
     SysBusDevice  dev;
     const char *mrtypename;
+    MemoryRegion root;
+    MemoryRegion sysmr;
     MemoryRegion iomem;
     /* /dev/iommu interface */
     IOMMUFDBackend *iommufd;

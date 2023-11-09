@@ -594,6 +594,7 @@ static SMMUDevice *smmu_get_sdev(SMMUState *s, SMMUPciBus *sbus,
 
     if (!sdev) {
         char *name = g_strdup_printf("%s-%d-%d", s->mrtypename, devfn, index++);
+        MemoryRegion *mr;
 
         sdev = sbus->pbdev[devfn] = g_new0(SMMUDevice, 1);
 
@@ -604,8 +605,13 @@ static SMMUDevice *smmu_get_sdev(SMMUState *s, SMMUPciBus *sbus,
         memory_region_init_iommu(&sdev->iommu, sizeof(sdev->iommu),
                                  s->mrtypename,
                                  OBJECT(s), name, UINT64_MAX);
-        address_space_init(&sdev->as,
-                           MEMORY_REGION(&sdev->iommu), name);
+        if (s->nested) {
+            mr = &s->root;
+        } else {
+            mr = MEMORY_REGION(&sdev->iommu);
+        }
+
+        address_space_init(&sdev->as, mr, name);
         trace_smmu_add_mr(name);
         g_free(name);
     }
@@ -772,6 +778,14 @@ static void smmu_base_realize(DeviceState *dev, Error **errp)
                 s->nested = false;
             }
         }
+    }
+
+    if (s->nested) {
+        memory_region_init(&s->root, OBJECT(s), "s2mr", UINT64_MAX);
+        memory_region_init_alias(&s->sysmr, OBJECT(s), "sysmr",
+                                 get_system_memory(), 0,
+                                 memory_region_size(get_system_memory()));
+        memory_region_add_subregion_overlap(&s->root, 0, &s->sysmr, 0);
     }
 
     if (s->primary_bus) {
