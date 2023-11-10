@@ -1288,7 +1288,7 @@ static int smmuv3_invalidate_cache(SMMUState *s, Cmd *cmds, uint32_t *ncmds, uin
         return 0;
     }
 
-    QLIST_FOREACH(sdev, &s->devices_with_notifiers, next) {
+    QLIST_FOREACH(sdev, &s->devices_with_nesting, next) {
         if (!sdev->hwpt || !sdev->idev)
             continue;
         ntlbi = *ncmds;
