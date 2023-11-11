@@ -72,7 +72,7 @@ static inline uint8_t msi_cap_sizeof(uint16_t flags)
     return 0;
 }
 
-//#define MSI_DEBUG
+#define MSI_DEBUG
 
 #ifdef MSI_DEBUG
 # define MSI_DPRINTF(fmt, ...)                                          \
@@ -232,6 +232,7 @@ int msi_init(struct PCIDevice *dev, uint8_t offset,
     dev->msi_cap = config_offset;
     dev->cap_present |= QEMU_PCI_CAP_MSI;
 
+    MSI_DEV_PRINTF(dev, "config_offset: 0x%x, cap_present: 0x%x\n", dev->msi_cap, dev->cap_present);
     pci_set_word(dev->config + msi_flags_off(dev), flags);
     pci_set_word(dev->wmask + msi_flags_off(dev),
                  PCI_MSI_FLAGS_QSIZE | PCI_MSI_FLAGS_ENABLE);

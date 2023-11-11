@@ -1389,28 +1389,34 @@ int vfio_kvm_device_add_fd(int fd, Error **errp)
         .addr = (uint64_t)(unsigned long)&fd,
     };
 
+    error_report("---------%s, %d: fd=%d\n", __func__, __LINE__, fd);
     if (!kvm_enabled()) {
         return 0;
     }
 
+    error_report("---------%s, %d: fd=%d\n", __func__, __LINE__, fd);
     if (vfio_kvm_device_fd < 0) {
         struct kvm_create_device cd = {
             .type = KVM_DEV_TYPE_VFIO,
         };
 
+    error_report("---------%s, %d: fd=%d\n", __func__, __LINE__, fd);
         if (kvm_vm_ioctl(kvm_state, KVM_CREATE_DEVICE, &cd)) {
             error_setg_errno(errp, errno, "Failed to create KVM VFIO device");
             return -errno;
         }
 
+    error_report("---------%s, %d: fd=%d\n", __func__, __LINE__, fd);
         vfio_kvm_device_fd = cd.fd;
     }
 
+    error_report("---------%s, %d: fd=%d\n", __func__, __LINE__, fd);
     if (ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr)) {
         error_setg_errno(errp, errno, "Failed to add fd %d to KVM VFIO device",
                          fd);
         return -errno;
     }
+    error_report("---------%s, %d: fd=%d\n", __func__, __LINE__, fd);
 #endif
     return 0;
 }
@@ -1424,16 +1430,19 @@ int vfio_kvm_device_del_fd(int fd, Error **errp)
         .addr = (uint64_t)(unsigned long)&fd,
     };
 
+    error_report("---------%s, %d: fd=%d\n", __func__, __LINE__, fd);
     if (vfio_kvm_device_fd < 0) {
         error_setg(errp, "KVM VFIO device isn't created yet");
         return -EINVAL;
     }
 
+    error_report("---------%s, %d: fd=%d\n", __func__, __LINE__, fd);
     if (ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr)) {
         error_setg_errno(errp, errno,
                          "Failed to remove fd %d from KVM VFIO device", fd);
         return -errno;
     }
+    error_report("---------%s, %d: fd=%d\n", __func__, __LINE__, fd);
 #endif
     return 0;
 }

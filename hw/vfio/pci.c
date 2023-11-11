@@ -1267,6 +1267,8 @@ void vfio_pci_write_config(PCIDevice *pdev,
         pci_default_write_config(pdev, addr, val, len);
 
         is_enabled = msi_enabled(pdev);
+        error_report("%s: %s: msi_enabled ? %s",
+                     __func__, vdev->vbasedev.name, is_enabled ? "Y" : "N");
 
         if (!was_enabled) {
             if (is_enabled) {
