@@ -1250,7 +1250,7 @@ static void smmuv3_config_ste(SMMUDevice *sdev, int sid)
         error_report("Unable to find Stream Table Entry: %d", ret);
     }
     iommu_config.sid = sid;
-    iommu_config.ste[0] = ((uint64_t)ste.word[1]) << 32 | (ste.word[0] & ~0xf);
+    iommu_config.ste[0] = ((uint64_t)ste.word[1]) << 32 | (ste.word[0] & ~0xe);
     iommu_config.ste[1] = ((uint64_t)ste.word[3]) << 32 | ste.word[2];
     trace_smmuv3_config_ste(sid, iommu_config.ste[0], iommu_config.ste[1]);
 
