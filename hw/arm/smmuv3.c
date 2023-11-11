@@ -328,6 +328,8 @@ static void smmuv3_init_regs(SMMUv3State *s)
         s->idr[0] = FIELD_DP32(s->idr[0], IDR0, ATS, val);
         val = FIELD_EX32(sdev->info.idr[0], IDR0, ASID16);
         s->idr[0] = FIELD_DP32(s->idr[0], IDR0, ASID16, val);
+        val = FIELD_EX32(sdev->info.idr[0], IDR0, MSI);
+        s->idr[0] = FIELD_DP32(s->idr[0], IDR0, MSI, val);
         val = FIELD_EX32(sdev->info.idr[0], IDR0, TERM_MODEL);
         s->idr[0] = FIELD_DP32(s->idr[0], IDR0, TERM_MODEL, val);
         val = FIELD_EX32(sdev->info.idr[0], IDR0, STALL_MODEL);
