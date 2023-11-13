@@ -594,7 +594,6 @@ static SMMUDevice *smmu_get_sdev(SMMUState *s, SMMUPciBus *sbus,
 
     if (!sdev) {
         char *name = g_strdup_printf("%s-%d-%d", s->mrtypename, devfn, index++);
-        MemoryRegion *mr;
 
         sdev = sbus->pbdev[devfn] = g_new0(SMMUDevice, 1);
 
@@ -603,16 +602,23 @@ static SMMUDevice *smmu_get_sdev(SMMUState *s, SMMUPciBus *sbus,
         sdev->bus = bus;
         sdev->devfn = devfn;
 
+        memory_region_init(&sdev->root, OBJECT(s), "s2mr", UINT64_MAX);
         memory_region_init_iommu(&sdev->iommu, sizeof(sdev->iommu),
                                  s->mrtypename,
                                  OBJECT(s), name, UINT64_MAX);
+        memory_region_add_subregion_overlap(&sdev->root, 0,
+                                            MEMORY_REGION(&sdev->iommu),
+                                            0);
+        memory_region_init_alias(&sdev->sysmr, OBJECT(s), "sysmr",
+                                 get_system_memory(), 0,
+                                 memory_region_size(get_system_memory()));
+        memory_region_add_subregion_overlap(&sdev->root, 0, &sdev->sysmr, 0);
+        address_space_init(&sdev->as, &sdev->root, name);
         if (s->nested) {
-            mr = &s->root;
+            memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), false);
         } else {
-            mr = MEMORY_REGION(&sdev->iommu);
-        }
-
-        address_space_init(&sdev->as, mr, name);
+            memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), true);
+	}
         trace_smmu_add_mr(name);
         g_free(name);
     }
@@ -749,7 +755,6 @@ void smmu_iommu_uninstall_nested_ste(SMMUDevice *sdev)
         return;
     }
 
-    memory_region_set_enabled(&s->root, true);
     memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), false);
     iommufd_backend_free_id(hwpt->iommufd, hwpt->hwpt_id);
     g_free(hwpt);
@@ -802,9 +807,7 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
         goto free_hwpt;
     }
 
-    memory_region_set_enabled(&s->root, false);
     memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), true);
-
     sdev->hwpt = hwpt;
 
     return 0;
@@ -899,14 +902,6 @@ static void smmu_base_realize(DeviceState *dev, Error **errp)
                 s->nested = false;
             }
         }
-    }
-
-    if (s->nested) {
-        memory_region_init(&s->root, OBJECT(s), "s2mr", UINT64_MAX);
-        memory_region_init_alias(&s->sysmr, OBJECT(s), "sysmr",
-                                 get_system_memory(), 0,
-                                 memory_region_size(get_system_memory()));
-        memory_region_add_subregion_overlap(&s->root, 0, &s->sysmr, 0);
     }
 
     if (s->primary_bus) {

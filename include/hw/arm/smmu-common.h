@@ -120,6 +120,8 @@ typedef struct SMMUDevice {
     void               *smmu_common;
     PCIBus             *bus;
     int                devfn;
+    MemoryRegion       root;
+    MemoryRegion       sysmr;
     IOMMUMemoryRegion  iommu;
     IOMMUFDDevice      *idev;
     SMMUHwpt           *hwpt;
@@ -148,8 +150,6 @@ struct SMMUState {
     /* <private> */
     SysBusDevice  dev;
     const char *mrtypename;
-    MemoryRegion root;
-    MemoryRegion sysmr;
     MemoryRegion iomem;
     /* /dev/iommu interface */
     IOMMUFDBackend *iommufd;

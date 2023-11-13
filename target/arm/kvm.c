@@ -1021,7 +1021,9 @@ int kvm_arch_fixup_msi_route(struct kvm_irq_routing_entry *route,
     MemoryRegionSection mrs;
     MemoryRegion *mr;
 
+    error_report("--------%s, %d", __func__, __LINE__);
     if (as == &address_space_memory) {
+    error_report("--------%s, %d", __func__, __LINE__);
         return 0;
     }
 
@@ -1032,13 +1034,18 @@ int kvm_arch_fixup_msi_route(struct kvm_irq_routing_entry *route,
     mr = address_space_translate(as, address, &xlat, &len, true,
                                  MEMTXATTRS_UNSPECIFIED);
 
+    error_report("--------%s, %d: mr=%s, addr=0x%"PRIx64", xlat=0x%"PRIx64,
+		__func__, __LINE__, mr->name, address, xlat);
     if (!mr) {
+    error_report("--------%s, %d", __func__, __LINE__);
         return 1;
     }
 
     mrs = memory_region_find(mr, xlat, 1);
 
     if (!mrs.mr) {
+    error_report("--------%s, %d: mr=%s, xlat=0x%"PRIx64,
+		__func__, __LINE__, mr->name, xlat);
         return 1;
     }
 

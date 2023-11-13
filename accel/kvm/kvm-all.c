@@ -1968,20 +1968,25 @@ int kvm_irqchip_add_msi_route(KVMRouteChange *c, int vector, PCIDevice *dev)
     KVMState *s = c->s;
     MSIMessage msg = {0, 0};
 
+    error_report("--------%s, %d", __func__, __LINE__);
     if (pci_available && dev) {
+    error_report("--------%s, %d", __func__, __LINE__);
         msg = pci_get_msi_message(dev, vector);
     }
 
     if (kvm_gsi_direct_mapping()) {
+    error_report("--------%s, %d", __func__, __LINE__);
         return kvm_arch_msi_data_to_gsi(msg.data);
     }
 
     if (!kvm_gsi_routing_enabled()) {
+    error_report("--------%s, %d", __func__, __LINE__);
         return -ENOSYS;
     }
 
     virq = kvm_irqchip_get_virq(s);
     if (virq < 0) {
+    error_report("--------%s, %d", __func__, __LINE__);
         return virq;
     }
 
@@ -1996,6 +2001,7 @@ int kvm_irqchip_add_msi_route(KVMRouteChange *c, int vector, PCIDevice *dev)
         kroute.u.msi.devid = pci_requester_id(dev);
     }
     if (kvm_arch_fixup_msi_route(&kroute, msg.address, msg.data, dev)) {
+    error_report("--------%s, %d", __func__, __LINE__);
         kvm_irqchip_release_virq(s, virq);
         return -EINVAL;
     }
