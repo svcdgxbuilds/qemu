@@ -117,6 +117,7 @@ typedef struct SMMUHwpt {
 
 typedef struct SMMUDevice {
     void               *smmu;
+    void               *smmu_common;
     PCIBus             *bus;
     int                devfn;
     IOMMUMemoryRegion  iommu;

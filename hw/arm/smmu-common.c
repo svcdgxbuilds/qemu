@@ -599,6 +599,7 @@ static SMMUDevice *smmu_get_sdev(SMMUState *s, SMMUPciBus *sbus,
         sdev = sbus->pbdev[devfn] = g_new0(SMMUDevice, 1);
 
         sdev->smmu = s;
+        sdev->smmu_common = s;
         sdev->bus = bus;
         sdev->devfn = devfn;
 
@@ -733,10 +734,11 @@ int smmu_iommu_get_info(SMMUDevice *sdev, uint32_t *data_type,
 
 void smmu_iommu_uninstall_nested_ste(SMMUDevice *sdev)
 {
+    SMMUState *s = sdev->smmu_common;
     SMMUHwpt *hwpt = sdev->hwpt;
     SMMUHwpt *s2_hwpt;
 
-    if (!sdev || !hwpt || !sdev->idev) {
+    if (!sdev || !s || !hwpt || !sdev->idev) {
         return;
     }
 
@@ -747,6 +749,8 @@ void smmu_iommu_uninstall_nested_ste(SMMUDevice *sdev)
         return;
     }
 
+    memory_region_set_enabled(&s->root, true);
+    memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), false);
     iommufd_backend_free_id(hwpt->iommufd, hwpt->hwpt_id);
     g_free(hwpt);
     sdev->hwpt = NULL;
@@ -797,6 +801,9 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
         error_report("Unable to attach dev to stage-1 HW pagetable: %d", ret);
         goto free_hwpt;
     }
+
+    memory_region_set_enabled(&s->root, false);
+    memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), true);
 
     sdev->hwpt = hwpt;
 
