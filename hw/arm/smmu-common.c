@@ -602,23 +602,10 @@ static SMMUDevice *smmu_get_sdev(SMMUState *s, SMMUPciBus *sbus,
         sdev->bus = bus;
         sdev->devfn = devfn;
 
-        memory_region_init(&sdev->root, OBJECT(s), "s2mr", UINT64_MAX);
         memory_region_init_iommu(&sdev->iommu, sizeof(sdev->iommu),
                                  s->mrtypename,
                                  OBJECT(s), name, UINT64_MAX);
-        memory_region_add_subregion_overlap(&sdev->root, 0,
-                                            MEMORY_REGION(&sdev->iommu),
-                                            0);
-        memory_region_init_alias(&sdev->sysmr, OBJECT(s), "sysmr",
-                                 get_system_memory(), 0,
-                                 memory_region_size(get_system_memory()));
-        memory_region_add_subregion_overlap(&sdev->root, 0, &sdev->sysmr, 0);
-        address_space_init(&sdev->as, &sdev->root, name);
-        if (s->nested) {
-            memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), false);
-        } else {
-            memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), true);
-	}
+        address_space_init(&sdev->as, MEMORY_REGION(&sdev->iommu), name);
         trace_smmu_add_mr(name);
         g_free(name);
     }
@@ -634,6 +621,94 @@ static AddressSpace *smmu_find_add_as(PCIBus *bus, void *opaque, int devfn)
 
     return &sdev->as;
 }
+
+static bool iommufd_listener_skipped_section(MemoryRegionSection *section)
+{
+    return !memory_region_is_ram(section->mr) ||
+           memory_region_is_protected(section->mr) ||
+           /*
+            * Sizing an enabled 64-bit BAR can cause spurious mappings to
+            * addresses in the upper part of the 64-bit address space.  These
+            * are never accessed by the CPU and beyond the address width of
+            * some IOMMU hardware.  TODO: VFIO should tell us the IOMMU width.
+            */
+           section->offset_within_address_space & (1ULL << 63) ||
+           section->readonly;
+}
+
+static bool iommufd_get_section_iova_range(MemoryRegionSection *section,
+                                           hwaddr *out_iova, hwaddr *out_end,
+                                           Int128 *out_llend)
+{
+    Int128 llend;
+    hwaddr iova;
+
+    iova = REAL_HOST_PAGE_ALIGN(section->offset_within_address_space);
+    llend = int128_make64(section->offset_within_address_space);
+    llend = int128_add(llend, section->size);
+    llend = int128_and(llend, int128_exts64(qemu_real_host_page_mask()));
+    if (int128_ge(int128_make64(iova), llend)) {
+        return false;
+    }
+    *out_iova = iova;
+    *out_end = int128_get64(int128_sub(llend, int128_one()));
+    if (out_llend) {
+        *out_llend = llend;
+    }
+    return true;
+}
+
+static void iommufd_listener_region_add_s2domain(MemoryListener *listener,
+                                                 MemoryRegionSection *section)
+{
+    IOMMUFDBackend *iommufd = container_of(listener, IOMMUFDBackend, listener);
+    SMMUHwpt *s2_hwpt = iommufd->s2_hwpt;
+    Int128 llend, llsize;
+    hwaddr iova, end;
+    void *vaddr;
+
+    if (iommufd_listener_skipped_section(section)) {
+        return;
+    }
+    if (!iommufd_get_section_iova_range(section, &iova, &end, &llend)) {
+        return;
+    }
+    llsize = int128_sub(llend, int128_make64(iova));
+    vaddr = memory_region_get_ram_ptr(section->mr) +
+            section->offset_within_region +
+            (iova - section->offset_within_address_space);
+
+    /* Callee will report trace and failure itself */
+    iommufd_backend_map_dma(iommufd, s2_hwpt->ioas_id, iova, int128_get64(llsize),
+                            vaddr, section->readonly);
+}
+
+static void iommufd_listener_region_del_s2domain(MemoryListener *listener,
+                                                 MemoryRegionSection *section)
+{
+    IOMMUFDBackend *iommufd = container_of(listener, IOMMUFDBackend, listener);
+    SMMUHwpt *s2_hwpt = iommufd->s2_hwpt;
+    Int128 llend, llsize;
+    hwaddr iova, end;
+
+    if (iommufd_listener_skipped_section(section)) {
+        return;
+    }
+    if (!iommufd_get_section_iova_range(section, &iova, &end, &llend)) {
+        return;
+    }
+    llsize = int128_sub(llend, int128_make64(iova));
+
+    /* Callee will report trace and failure itself */
+    iommufd_backend_unmap_dma(iommufd, s2_hwpt->ioas_id, iova, int128_get64(llsize));
+}
+
+static const MemoryListener iommufd_s2domain_memory_listener = {
+    .name = "iommufd_s2domain",
+    .priority = 1000,
+    .region_add = iommufd_listener_region_add_s2domain,
+    .region_del = iommufd_listener_region_del_s2domain,
+};
 
 static int smmu_dev_set_iommu_device(PCIBus *bus, void *opaque, int devfn,
                                      IOMMUFDDevice *idev, Error **errp)
@@ -667,6 +742,7 @@ static int smmu_dev_set_iommu_device(PCIBus *bus, void *opaque, int devfn,
 
         ret = iommufd_device_attach_hwpt(idev, s2_hwptid);
         if (ret) {
+            memory_listener_unregister(&s->iommufd->listener);
             iommufd_backend_free_id(s->iommufd->fd, s2_hwptid);
             error_report("Unable to attach dev to stage-2 HW pagetable: %d", ret);
             return ret;
@@ -677,6 +753,8 @@ static int smmu_dev_set_iommu_device(PCIBus *bus, void *opaque, int devfn,
         s2_hwpt->hwpt_id = s2_hwptid;
         s2_hwpt->ioas_id = idev->def_hwpt_id;
         s->iommufd->s2_hwpt = s2_hwpt;
+        s->iommufd->listener = iommufd_s2domain_memory_listener;
+        memory_listener_register(&s->iommufd->listener, &address_space_memory);
     }
 
     sdev->idev = idev;
@@ -755,7 +833,6 @@ void smmu_iommu_uninstall_nested_ste(SMMUDevice *sdev)
         return;
     }
 
-    memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), false);
     iommufd_backend_free_id(hwpt->iommufd, hwpt->hwpt_id);
     g_free(hwpt);
     sdev->hwpt = NULL;
@@ -807,7 +884,6 @@ int smmu_iommu_install_nested_ste(SMMUState *s, SMMUDevice *sdev,
         goto free_hwpt;
     }
 
-    memory_region_set_enabled(MEMORY_REGION(&sdev->iommu), true);
     sdev->hwpt = hwpt;
 
     return 0;
