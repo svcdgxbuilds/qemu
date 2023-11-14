@@ -2042,6 +2042,10 @@ static int smmuv3_notify_flag_changed(IOMMUMemoryRegion *iommu,
     SMMUv3State *s3 = sdev->smmu;
     SMMUState *s = &(s3->smmu_state);
 
+    if (s->nested) {
+        return 0;
+    }
+
     if (new & IOMMU_NOTIFIER_DEVIOTLB_UNMAP) {
         error_setg(errp, "SMMUv3 does not support dev-iotlb yet");
         return -EINVAL;
@@ -2065,6 +2069,10 @@ static int smmuv3_notify_flag_changed(IOMMUMemoryRegion *iommu,
     return 0;
 }
 
+static void smmuv3_iommu_replay(IOMMUMemoryRegion *iommu_mr, IOMMUNotifier *n)
+{
+}
+
 static void smmuv3_iommu_memory_region_class_init(ObjectClass *klass,
                                                   void *data)
 {
@@ -2072,6 +2080,7 @@ static void smmuv3_iommu_memory_region_class_init(ObjectClass *klass,
 
     imrc->translate = smmuv3_translate;
     imrc->notify_flag_changed = smmuv3_notify_flag_changed;
+    imrc->replay = smmuv3_iommu_replay;
 }
 
 static const TypeInfo smmuv3_type_info = {
