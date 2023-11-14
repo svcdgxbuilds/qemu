@@ -571,6 +571,94 @@ SMMUPciBus *smmu_find_smmu_pcibus(SMMUState *s, uint8_t bus_num)
     return NULL;
 }
 
+static bool iommufd_listener_skipped_section(MemoryRegionSection *section)
+{
+    return !memory_region_is_ram(section->mr) ||
+           memory_region_is_protected(section->mr) ||
+           /*
+            * Sizing an enabled 64-bit BAR can cause spurious mappings to
+            * addresses in the upper part of the 64-bit address space.  These
+            * are never accessed by the CPU and beyond the address width of
+            * some IOMMU hardware.  TODO: VFIO should tell us the IOMMU width.
+            */
+           section->offset_within_address_space & (1ULL << 63) ||
+           section->readonly;
+}
+
+static bool iommufd_get_section_iova_range(MemoryRegionSection *section,
+                                           hwaddr *out_iova, hwaddr *out_end,
+                                           Int128 *out_llend)
+{
+    Int128 llend;
+    hwaddr iova;
+
+    iova = REAL_HOST_PAGE_ALIGN(section->offset_within_address_space);
+    llend = int128_make64(section->offset_within_address_space);
+    llend = int128_add(llend, section->size);
+    llend = int128_and(llend, int128_exts64(qemu_real_host_page_mask()));
+    if (int128_ge(int128_make64(iova), llend)) {
+        return false;
+    }
+    *out_iova = iova;
+    *out_end = int128_get64(int128_sub(llend, int128_one()));
+    if (out_llend) {
+        *out_llend = llend;
+    }
+    return true;
+}
+
+static void iommufd_listener_region_add_s2hwpt(MemoryListener *listener,
+                                               MemoryRegionSection *section)
+{
+    IOMMUFDBackend *iommufd = container_of(listener, IOMMUFDBackend, listener);
+    SMMUHwpt *s2_hwpt = iommufd->s2_hwpt;
+    Int128 llend, llsize;
+    hwaddr iova, end;
+    void *vaddr;
+
+    if (iommufd_listener_skipped_section(section)) {
+        return;
+    }
+    if (!iommufd_get_section_iova_range(section, &iova, &end, &llend)) {
+        return;
+    }
+    llsize = int128_sub(llend, int128_make64(iova));
+    vaddr = memory_region_get_ram_ptr(section->mr) +
+            section->offset_within_region +
+            (iova - section->offset_within_address_space);
+
+    /* Callee will report trace and failure itself */
+    iommufd_backend_map_dma(iommufd, s2_hwpt->ioas_id, iova, int128_get64(llsize),
+                            vaddr, section->readonly);
+}
+
+static void iommufd_listener_region_del_s2hwpt(MemoryListener *listener,
+                                               MemoryRegionSection *section)
+{
+    IOMMUFDBackend *iommufd = container_of(listener, IOMMUFDBackend, listener);
+    SMMUHwpt *s2_hwpt = iommufd->s2_hwpt;
+    Int128 llend, llsize;
+    hwaddr iova, end;
+
+    if (iommufd_listener_skipped_section(section)) {
+        return;
+    }
+    if (!iommufd_get_section_iova_range(section, &iova, &end, &llend)) {
+        return;
+    }
+    llsize = int128_sub(llend, int128_make64(iova));
+
+    /* Callee will report trace and failure itself */
+    iommufd_backend_unmap_dma(iommufd, s2_hwpt->ioas_id, iova, int128_get64(llsize));
+}
+
+static const MemoryListener iommufd_s2hwpt_memory_listener = {
+    .name = "iommufd_s2hwpt",
+    .priority = 1000,
+    .region_add = iommufd_listener_region_add_s2hwpt,
+    .region_del = iommufd_listener_region_del_s2hwpt,
+};
+
 static AddressSpace *smmu_find_add_as(PCIBus *bus, void *opaque, int devfn)
 {
     SMMUState *s = opaque;
