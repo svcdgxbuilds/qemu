@@ -7,7 +7,7 @@ config PSERIES
     select DIMM
     select PCI
     select SPAPR_VSCSI
-    select VFIO if LINUX   # needed by spapr_pci_vfio.c
+    select VFIO_PCI if LINUX   # needed by spapr_pci_vfio.c
     select XICS
     select XIVE
     select MSI_NONBROKEN
