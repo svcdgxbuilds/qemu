@@ -1239,20 +1239,24 @@ static void smmuv3_config_ste(SMMUDevice *sdev, int sid)
         return;
     }
 
-    cfg = smmuv3_get_config(sdev, &event);
-    if (!cfg || !cfg->s1ctxptr) {
-        smmu_iommu_uninstall_nested_ste(sdev);
-        smmuv3_flush_config(sdev);
-        return;
-    }
-
     ret = smmu_find_ste(sdev->smmu, sid, &ste, &event);
     if (ret) {
         error_report("Unable to find Stream Table Entry: %d", ret);
     }
 
+    cfg = smmuv3_get_config(sdev, &event);
+    if (!cfg || !cfg->s1ctxptr) {
+        error_report("ste: %x %x : %x %x",
+                     ste.word[3], ste.word[2], ste.word[1], ste.word[0]);
+        smmu_iommu_uninstall_nested_ste(sdev);
+        smmuv3_flush_config(sdev);
+        return;
+    }
+
     config = STE_CONFIG(&ste);
     if (!STE_CFG_S1_ENABLED(config)) {
+        error_report("ste: %x %x : %x %x",
+                     ste.word[3], ste.word[2], ste.word[1], ste.word[0]);
         return;
     }
     iommu_config.sid = sid;
