@@ -30,8 +30,13 @@
 #include <linux/vfio.h>
 #endif
 #include "sysemu/sysemu.h"
+<<<<<<< HEAD
 #include "hw/vfio/vfio-container-base.h"
 #include "sysemu/iommufd_device.h"
+||||||| 8fa379170c
+=======
+#include "hw/vfio/vfio-container-base.h"
+>>>>>>> upstream/master
 
 #define VFIO_MSG_PREFIX "vfio %s: "
 
@@ -125,9 +130,15 @@ typedef struct VFIODevice {
     OnOffAuto pre_copy_dirty_page_tracking;
     bool dirty_pages_supported;
     bool dirty_tracking;
+<<<<<<< HEAD
     int devid;
     IOMMUFDBackend *iommufd;
     IOMMUFDDevice idev;
+||||||| 8fa379170c
+=======
+    int devid;
+    IOMMUFDBackend *iommufd;
+>>>>>>> upstream/master
 } VFIODevice;
 
 struct VFIODeviceOps {
@@ -212,8 +223,13 @@ typedef QLIST_HEAD(VFIOGroupList, VFIOGroup) VFIOGroupList;
 typedef QLIST_HEAD(VFIODeviceList, VFIODevice) VFIODeviceList;
 extern VFIOGroupList vfio_group_list;
 extern VFIODeviceList vfio_device_list;
+<<<<<<< HEAD
 extern const VFIOIOMMUOps vfio_legacy_ops;
 extern const VFIOIOMMUOps vfio_iommufd_ops;
+||||||| 8fa379170c
+
+=======
+>>>>>>> upstream/master
 extern const MemoryListener vfio_memory_listener;
 extern int vfio_kvm_device_fd;
 

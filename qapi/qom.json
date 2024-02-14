@@ -795,6 +795,7 @@
   'data': { 'socket': 'SocketAddress', 'device': 'str' } }
 
 ##
+<<<<<<< HEAD
 # @AcpiGenericInitiatorProperties:
 #
 # Properties for acpi-generic-initiator objects.
@@ -828,6 +829,26 @@
   'data': { '*fd': 'str' } }
 
 ##
+||||||| 8fa379170c
+=======
+# @IOMMUFDProperties:
+#
+# Properties for iommufd objects.
+#
+# @fd: file descriptor name previously passed via 'getfd' command,
+#     which represents a pre-opened /dev/iommu.  This allows the
+#     iommufd object to be shared accross several subsystems
+#     (VFIO, VDPA, ...), and the file descriptor to be shared
+#     with other process, e.g. DPDK.  (default: QEMU opens
+#     /dev/iommu by itself)
+#
+# Since: 9.0
+##
+{ 'struct': 'IOMMUFDProperties',
+  'data': { '*fd': 'str' } }
+
+##
+>>>>>>> upstream/master
 # @RngProperties:
 #
 # Properties for objects of classes derived from rng.
@@ -1074,8 +1095,9 @@
 #
 # Create a QOM object.
 #
-# Returns: Nothing on success Error if @qom-type is not a valid class
-#     name
+# Returns:
+#     - Nothing on success
+#     - Error if @qom-type is not a valid class name
 #
 # Since: 2.0
 #
@@ -1096,8 +1118,9 @@
 #
 # @id: the name of the QOM object to remove
 #
-# Returns: Nothing on success Error if @id is not a valid id for a QOM
-#     object
+# Returns:
+#     - Nothing on success
+#     - Error if @id is not a valid id for a QOM object
 #
 # Since: 2.0
 #

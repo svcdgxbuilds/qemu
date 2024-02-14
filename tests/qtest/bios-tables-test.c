@@ -112,6 +112,7 @@ static const char *iasl;
 #endif
 
 static int verbosity_level;
+static GArray *load_expected_aml(test_data *data);
 
 static bool compare_signature(const AcpiSdtTable *sdt, const char *signature)
 {
@@ -244,21 +245,32 @@ static void test_acpi_fadt_table(test_data *data)
 
 static void dump_aml_files(test_data *data, bool rebuild)
 {
-    AcpiSdtTable *sdt;
+    AcpiSdtTable *sdt, *exp_sdt;
     GError *error = NULL;
     gchar *aml_file = NULL;
+    test_data exp_data = {};
     gint fd;
     ssize_t ret;
     int i;
 
+    exp_data.tables = load_expected_aml(data);
     for (i = 0; i < data->tables->len; ++i) {
         const char *ext = data->variant ? data->variant : "";
         sdt = &g_array_index(data->tables, AcpiSdtTable, i);
+        exp_sdt = &g_array_index(exp_data.tables, AcpiSdtTable, i);
         g_assert(sdt->aml);
+        g_assert(exp_sdt->aml);
 
         if (rebuild) {
             aml_file = g_strdup_printf("%s/%s/%.4s%s", data_dir, data->machine,
                                        sdt->aml, ext);
+            if (!g_file_test(aml_file, G_FILE_TEST_EXISTS) &&
+                sdt->aml_len == exp_sdt->aml_len &&
+                !memcmp(sdt->aml, exp_sdt->aml, sdt->aml_len)) {
+                /* identical tables, no need to write new files */
+                g_free(aml_file);
+                continue;
+            }
             fd = g_open(aml_file, O_WRONLY|O_TRUNC|O_CREAT,
                         S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
             if (fd < 0) {
@@ -1003,7 +1015,7 @@ static void test_acpi_q35_tcg(void)
     free_test_data(&data);
 }
 
-static void test_acpi_q35_tcg_type4_count(void)
+static void test_acpi_q35_kvm_type4_count(void)
 {
     test_data data = {
         .machine = MACHINE_Q35,
@@ -1019,7 +1031,7 @@ static void test_acpi_q35_tcg_type4_count(void)
     free_test_data(&data);
 }
 
-static void test_acpi_q35_tcg_core_count(void)
+static void test_acpi_q35_kvm_core_count(void)
 {
     test_data data = {
         .machine = MACHINE_Q35,
@@ -1036,7 +1048,7 @@ static void test_acpi_q35_tcg_core_count(void)
     free_test_data(&data);
 }
 
-static void test_acpi_q35_tcg_core_count2(void)
+static void test_acpi_q35_kvm_core_count2(void)
 {
     test_data data = {
         .machine = MACHINE_Q35,
@@ -1053,7 +1065,7 @@ static void test_acpi_q35_tcg_core_count2(void)
     free_test_data(&data);
 }
 
-static void test_acpi_q35_tcg_thread_count(void)
+static void test_acpi_q35_kvm_thread_count(void)
 {
     test_data data = {
         .machine = MACHINE_Q35,
@@ -1070,7 +1082,7 @@ static void test_acpi_q35_tcg_thread_count(void)
     free_test_data(&data);
 }
 
-static void test_acpi_q35_tcg_thread_count2(void)
+static void test_acpi_q35_kvm_thread_count2(void)
 {
     test_data data = {
         .machine = MACHINE_Q35,
@@ -2250,15 +2262,15 @@ int main(int argc, char *argv[])
                 qtest_add_func("acpi/q35/kvm/xapic", test_acpi_q35_kvm_xapic);
                 qtest_add_func("acpi/q35/kvm/dmar", test_acpi_q35_kvm_dmar);
                 qtest_add_func("acpi/q35/type4-count",
-                               test_acpi_q35_tcg_type4_count);
+                               test_acpi_q35_kvm_type4_count);
                 qtest_add_func("acpi/q35/core-count",
-                               test_acpi_q35_tcg_core_count);
+                               test_acpi_q35_kvm_core_count);
                 qtest_add_func("acpi/q35/core-count2",
-                               test_acpi_q35_tcg_core_count2);
+                               test_acpi_q35_kvm_core_count2);
                 qtest_add_func("acpi/q35/thread-count",
-                               test_acpi_q35_tcg_thread_count);
+                               test_acpi_q35_kvm_thread_count);
                 qtest_add_func("acpi/q35/thread-count2",
-                               test_acpi_q35_tcg_thread_count2);
+                               test_acpi_q35_kvm_thread_count2);
             }
             if (qtest_has_device("virtio-iommu-pci")) {
                 qtest_add_func("acpi/q35/viot", test_acpi_q35_viot);

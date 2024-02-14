@@ -6,7 +6,6 @@
 # = Net devices
 ##
 
-{ 'include': 'common.json' }
 { 'include': 'sockets.json' }
 
 ##
@@ -18,8 +17,9 @@
 #
 # @up: true to set the link status to be up
 #
-# Returns: Nothing on success If @name is not a valid network device,
-#     DeviceNotFound
+# Returns:
+#     - Nothing on success
+#     - If @name is not a valid network device, DeviceNotFound
 #
 # Since: 0.14
 #
@@ -44,8 +44,9 @@
 #
 # Since: 0.14
 #
-# Returns: Nothing on success If @type is not a valid network backend,
-#     DeviceNotFound
+# Returns:
+#     - Nothing on success
+#     - If @type is not a valid network backend, DeviceNotFound
 #
 # Example:
 #
@@ -64,8 +65,9 @@
 #
 # @id: the name of the network backend to remove
 #
-# Returns: Nothing on success If @id is not a valid network backend,
-#     DeviceNotFound
+# Returns:
+#     - Nothing on success
+#     - If @id is not a valid network backend, DeviceNotFound
 #
 # Since: 0.14
 #
@@ -101,6 +103,17 @@
     '*model':   'str',
     '*addr':    'str',
     '*vectors': 'uint32' } }
+
+##
+# @String:
+#
+# A fat type wrapping 'str', to be embedded in lists.
+#
+# Since: 1.2
+##
+{ 'struct': 'String',
+  'data': {
+    'str': 'str' } }
 
 ##
 # @NetdevUserOptions:

@@ -440,6 +440,7 @@ vfio_spapr_container_del_section_window(VFIOContainerBase *bcontainer,
     }
 }
 
+<<<<<<< HEAD
 static VFIOIOMMUOps vfio_iommu_spapr_ops;
 
 static void setup_spapr_ops(VFIOContainerBase *bcontainer)
@@ -451,10 +452,42 @@ static void setup_spapr_ops(VFIOContainerBase *bcontainer)
 }
 
 int vfio_spapr_container_init(VFIOContainer *container, Error **errp)
+||||||| 8fa379170c
+int vfio_spapr_container_init(VFIOContainer *container, Error **errp)
+=======
+static void vfio_spapr_container_release(VFIOContainerBase *bcontainer)
 {
+    VFIOContainer *container = container_of(bcontainer, VFIOContainer,
+                                            bcontainer);
+    VFIOSpaprContainer *scontainer = container_of(container, VFIOSpaprContainer,
+                                                  container);
+    VFIOHostDMAWindow *hostwin, *next;
+
+    if (container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU) {
+        memory_listener_unregister(&scontainer->prereg_listener);
+    }
+    QLIST_FOREACH_SAFE(hostwin, &scontainer->hostwin_list, hostwin_next,
+                       next) {
+        QLIST_REMOVE(hostwin, hostwin_next);
+        g_free(hostwin);
+    }
+}
+
+static int vfio_spapr_container_setup(VFIOContainerBase *bcontainer,
+                                      Error **errp)
+>>>>>>> upstream/master
+{
+<<<<<<< HEAD
     VFIOContainerBase *bcontainer = &container->bcontainer;
     VFIOSpaprContainer *scontainer = container_of(container, VFIOSpaprContainer,
                                                   container);
+||||||| 8fa379170c
+=======
+    VFIOContainer *container = container_of(bcontainer, VFIOContainer,
+                                            bcontainer);
+    VFIOSpaprContainer *scontainer = container_of(container, VFIOSpaprContainer,
+                                                  container);
+>>>>>>> upstream/master
     struct vfio_iommu_spapr_tce_info info;
     bool v2 = container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU;
     int ret, fd = container->fd;
@@ -528,12 +561,19 @@ listener_unregister_exit:
     return ret;
 }
 
-void vfio_spapr_container_deinit(VFIOContainer *container)
+static void vfio_iommu_spapr_class_init(ObjectClass *klass, void *data)
 {
+<<<<<<< HEAD
     VFIOSpaprContainer *scontainer = container_of(container, VFIOSpaprContainer,
                                                   container);
     VFIOHostDMAWindow *hostwin, *next;
+||||||| 8fa379170c
+    VFIOHostDMAWindow *hostwin, *next;
+=======
+    VFIOIOMMUClass *vioc = VFIO_IOMMU_CLASS(klass);
+>>>>>>> upstream/master
 
+<<<<<<< HEAD
     if (container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU) {
         memory_listener_unregister(&scontainer->prereg_listener);
     }
@@ -543,3 +583,30 @@ void vfio_spapr_container_deinit(VFIOContainer *container)
         g_free(hostwin);
     }
 }
+||||||| 8fa379170c
+    if (container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU) {
+        memory_listener_unregister(&container->prereg_listener);
+    }
+    QLIST_FOREACH_SAFE(hostwin, &container->hostwin_list, hostwin_next,
+                       next) {
+        QLIST_REMOVE(hostwin, hostwin_next);
+        g_free(hostwin);
+    }
+}
+=======
+    vioc->add_window = vfio_spapr_container_add_section_window;
+    vioc->del_window = vfio_spapr_container_del_section_window;
+    vioc->release = vfio_spapr_container_release;
+    vioc->setup = vfio_spapr_container_setup;
+};
+
+static const TypeInfo types[] = {
+    {
+        .name = TYPE_VFIO_IOMMU_SPAPR,
+        .parent = TYPE_VFIO_IOMMU_LEGACY,
+        .class_init = vfio_iommu_spapr_class_init,
+    },
+};
+
+DEFINE_TYPES(types)
+>>>>>>> upstream/master

@@ -35,7 +35,7 @@ static const VMStateDescription vmstate_stellaris_gamepad = {
     .name = "stellaris_gamepad",
     .version_id = 4,
     .minimum_version_id = 4,
-    .fields = (VMStateField[]) {
+    .fields = (const VMStateField[]) {
         VMSTATE_VARRAY_UINT32(pressed, StellarisGamepad, num_buttons,
                               0, vmstate_info_uint8, uint8_t),
         VMSTATE_END_OF_LIST()
@@ -61,6 +61,13 @@ static void stellaris_gamepad_realize(DeviceState *dev, Error **errp)
     s->pressed = g_new0(uint8_t, s->num_buttons);
     qdev_init_gpio_out(dev, s->irqs, s->num_buttons);
     qemu_input_handler_register(dev, &stellaris_gamepad_handler);
+}
+
+static void stellaris_gamepad_finalize(Object *obj)
+{
+    StellarisGamepad *s = STELLARIS_GAMEPAD(obj);
+
+    g_free(s->keycodes);
 }
 
 static void stellaris_gamepad_reset_enter(Object *obj, ResetType type)
@@ -92,6 +99,7 @@ static const TypeInfo stellaris_gamepad_info[] = {
         .name = TYPE_STELLARIS_GAMEPAD,
         .parent = TYPE_SYS_BUS_DEVICE,
         .instance_size = sizeof(StellarisGamepad),
+        .instance_finalize = stellaris_gamepad_finalize,
         .class_init = stellaris_gamepad_class_init,
     },
 };

@@ -1758,11 +1758,17 @@ static bool vtd_switch_address_space(VTDAddressSpace *as)
     int ret = 0;
     bool use_iommu, pt;
     /* Whether we need to take the BQL on our own */
+<<<<<<< HEAD
     bool take_bql = !qemu_mutex_iothread_locked();
     struct vtd_as_key key = {
         .bus = as->bus,
         .devfn = as->devfn,
     };
+||||||| 8fa379170c
+    bool take_bql = !qemu_mutex_iothread_locked();
+=======
+    bool take_bql = !bql_locked();
+>>>>>>> upstream/master
 
     assert(as);
 
@@ -1780,7 +1786,7 @@ static bool vtd_switch_address_space(VTDAddressSpace *as)
      * it. We'd better make sure we have had it already, or, take it.
      */
     if (take_bql) {
-        qemu_mutex_lock_iothread();
+        bql_lock();
     }
 
     /* For passthrough device, we don't switch as */
@@ -1856,7 +1862,7 @@ static bool vtd_switch_address_space(VTDAddressSpace *as)
     }
 
     if (take_bql) {
-        qemu_mutex_unlock_iothread();
+        bql_unlock();
     }
 
     return use_iommu;
@@ -5075,7 +5081,7 @@ static const VMStateDescription vtd_vmstate = {
     .minimum_version_id = 1,
     .priority = MIG_PRI_IOMMU,
     .post_load = vtd_post_load,
-    .fields = (VMStateField[]) {
+    .fields = (const VMStateField[]) {
         VMSTATE_UINT64(root, IntelIOMMUState),
         VMSTATE_UINT64(intr_root, IntelIOMMUState),
         VMSTATE_UINT64(iq, IntelIOMMUState),
@@ -6132,11 +6138,7 @@ static bool vtd_decide_config(IntelIOMMUState *s, Error **errp)
                                               ON_OFF_AUTO_ON : ON_OFF_AUTO_OFF;
     }
     if (s->intr_eim == ON_OFF_AUTO_ON && !s->buggy_eim) {
-        if (!kvm_irqchip_is_split()) {
-            error_setg(errp, "eim=on requires accel=kvm,kernel-irqchip=split");
-            return false;
-        }
-        if (kvm_enabled() && !kvm_enable_x2apic()) {
+        if (kvm_irqchip_is_split() && !kvm_enable_x2apic()) {
             error_setg(errp, "eim=on requires support on the KVM side"
                              "(X2APIC_API, first shipped in v4.7)");
             return false;

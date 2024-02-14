@@ -3,11 +3,17 @@ config PSERIES
     imply PCI_DEVICES
     imply TEST_DEVICES
     imply VIRTIO_VGA
+    imply VFIO_PCI if LINUX   # needed by spapr_pci_vfio.c
     select NVDIMM
     select DIMM
     select PCI
     select SPAPR_VSCSI
+<<<<<<< HEAD
     select VFIO_PCI if LINUX   # needed by spapr_pci_vfio.c
+||||||| 8fa379170c
+    select VFIO if LINUX   # needed by spapr_pci_vfio.c
+=======
+>>>>>>> upstream/master
     select XICS
     select XIVE
     select MSI_NONBROKEN
